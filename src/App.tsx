@@ -54,6 +54,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const cloudQueue = useRef<Promise<void>>(Promise.resolve());
   const cloudBlocked = useRef(false);
   const [cloudFailure, setCloudFailure] = useState('');
+  const [cloudRetrying, setCloudRetrying] = useState(false);
   const guideKey = account ? `mytasker-guide:${account.id}` : '';
   const [guideOpen, setGuideOpen] = useState(() => Boolean(account && !localStorage.getItem(guideKey)));
   const closeGuide = () => { setGuideOpen(false); if (guideKey) localStorage.setItem(guideKey,'seen'); };
@@ -217,7 +218,8 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     });
     alertNotice('Progress updated');
   }
-  function openDailyTask(task: Task) {
+  function openDailyTask(task: Task | null, lane: Lane = 'urgent') {
+    if (!task) { showEditor(null, lane); return; }
     if (board.plannedEntries.some(entry => entry.id === task.id)) navigate('today');
     else showEditor(task);
   }
@@ -259,6 +261,30 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     try { await afterSave(); }
     catch (error) { alertNotice(error instanceof Error ? error.message : 'Unable to leave safely.'); }
   }
+  async function retryCloudSync() {
+    if (!account || cloudRetrying) return;
+    setCloudRetrying(true);
+    await cloudQueue.current;
+    try {
+      const remote = await loadCloudBoard();
+      if (remote.revision !== cloudRevision.current) {
+        throw new Error('Another device saved newer changes. Export your current task board before reloading; do not overwrite the other device.');
+      }
+      const saved = await saveCloudBoard(board, cloudRevision.current);
+      cloudSaved.current = JSON.stringify(board);
+      cloudRevision.current = saved.revision;
+      cloudBlocked.current = false;
+      setCloudFailure('');
+      setSaveError(false);
+      alertNotice('Your latest planner changes were saved securely.');
+    } catch (err) {
+      cloudBlocked.current = true;
+      setSaveError(true);
+      setCloudFailure(err instanceof Error ? err.message : 'Cannot reach your account.');
+    } finally {
+      setCloudRetrying(false);
+    }
+  }
   async function signOutSafely() { if (onSignOut) await leaveSafely(onSignOut); }
   async function returnToAdmin() { if (onAdminReturn) await leaveSafely(onAdminReturn); }
   function importFromThisBrowser() {
@@ -299,7 +325,14 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
       <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right">{account && onAdminReturn && <button type="button" className="icon-button" aria-label="Return to secured admin" title="Admin dashboard" onClick={()=>void returnToAdmin()}><ShieldCheck size={19}/></button>}{account && <button type="button" className="icon-button auth-help-top" aria-label="Show getting started guide" onClick={() => setGuideOpen(true)}><CircleHelp size={19}/></button>}<span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button>
         {account && <button className="icon-button auth-logout-top" type="button" aria-label="Save and sign out" onClick={() => void signOutSafely()}><LogOut size={20}/></button>}</div></header>
       <main className="content" id="main-content" tabIndex={-1}>
-        {saveError && <div className="save-warning" role="alert">{account ? `Your cloud changes could not be saved: ${cloudFailure}. Export a backup from Settings before leaving or reloading this page.` : 'Browser storage is unavailable or full. Export your work before leaving this page.'}</div>}
+        {saveError && <div className="save-warning" role="alert">
+          {account ? <>
+            <strong>Changes not synced.</strong> {cloudFailure}. Your edits are still on this page; export a backup before closing it.
+            <div className="cloud-recovery-actions">
+              <button className="button button-secondary" disabled={cloudRetrying} onClick={()=>void retryCloudSync()}>{cloudRetrying?'Retrying…':'Retry cloud sync'}</button>
+              <button className="button button-secondary" onClick={exportData}>Download local backup</button>
+            </div>
+          </> : 'Browser storage is unavailable or full. Export your work before leaving this page.'}</div>}
         {view !== 'tracker' && view !== 'quotes' && <section className="direction-banner" aria-label="Daily inspiration"><div><span>MY DIRECTION</span><p>{quoteSettings(board.quotes).direction || 'Choose a reminder of what matters to you.'}</p></div><div><span>TODAY’S REMINDER</span><p>{reminder.text}</p></div><button className="icon-button" aria-label="Edit direction and quotes" onClick={() => navigate('quotes')}><Quote size={18}/></button></section>}
         {view === 'library' && <LibraryView tasks={board.tasks} onAdd={addTemplates}/>}
         {view === 'quotes' && <QuotesView value={board.quotes} today={day} board={board} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
