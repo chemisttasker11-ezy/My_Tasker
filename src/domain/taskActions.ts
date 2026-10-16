@@ -103,6 +103,35 @@ export function setTaskStatus(state: BoardState, id: string, status: TaskStatus,
   };
 }
 
+/** Set a specific recurring calendar occurrence without rewriting today's period.
+ * Non-completion progress changes are series-level and remain on the task editor.
+ */
+export function setCalendarOccurrenceStatus(
+  state: BoardState, id: string, status: TaskStatus, occurrenceDate: string, postponedTo?: string,
+  now = new Date()
+): BoardState {
+  const task = state.tasks.find(t=>t.id===id && !t.archivedAt);
+  if (!task || !validISODate(occurrenceDate) || !occurrenceDate) return state;
+  if (task.recurrence === 'none' || occurrenceDate === brisbaneToday(now)) {
+    return setTaskStatus(state,id,status,postponedTo,now);
+  }
+  if (status !== 'finished' && status !== 'not-started') return state;
+  const key = periodKey(task.recurrence,occurrenceDate);
+  const matching = state.completions.find(c=>c.taskId===id && c.periodKey===key);
+  if (status==='not-started') {
+    return matching ? {...state,completions:state.completions.filter(c=>c.id!==matching.id)} : state;
+  }
+  if (matching || state.completions.length>=50000) return state;
+  const completion: Completion = {
+    id:generateId(),taskId:id,title:task.title,category:task.category,
+    completedAt:now.toISOString(),periodKey:key,previousDueDate:task.dueDate,
+    nextDueDate:task.dueDate,previousStatus:task.status,
+    previousSubtasks:task.subtasks.map(s=>({...s}))
+  };
+  // Historical completion is a log entry; do not rewind dueDate/series anchor.
+  return {...state,completions:[completion,...state.completions]};
+}
+
 /** Save modal changes, without creating fake completions or losing existing history. */
 export function saveTaskChanges(state: BoardState, draft: Task, now = new Date()): BoardState {
   const prior = state.tasks.find(t => t.id === draft.id);
