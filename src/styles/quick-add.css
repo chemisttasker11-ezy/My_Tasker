@@ -1,0 +1,104 @@
+/* QuickAdd component styles - conforms to docs/DESIGN.md */
+
+.quick-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.quick-add-label {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.quick-add-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.quick-add-input-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.quick-add-input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  background-color: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.quick-add-input:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.quick-add-input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.quick-add-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 16px;
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--paper);
+  background-color: var(--purple);
+  border: 1px solid var(--purple);
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  box-sizing: border-box;
+  touch-action: manipulation;
+  transition: opacity 0.15s ease, filter 0.15s ease;
+}
+
+.quick-add-button:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+.quick-add-button:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 2px;
+}
+
+.quick-add-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quick-add-status {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--positive);
+  min-height: 20px;
+  line-height: 20px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quick-add-button {
+    transition: none;
+  }
+}
