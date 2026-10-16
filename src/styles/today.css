@@ -89,10 +89,10 @@
   font-weight: 800;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--ink);
-  background: #ffcf3d; /* Sun tone */
+  color: var(--on-sun);
+  background: var(--sun);
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .now-card-meta {

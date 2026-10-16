@@ -1,11 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { createRequire } from 'node:module';
+import AxeBuilder from '@axe-core/playwright';
 import { createTask, initialState, STORAGE_KEY } from '../src/model';
 
 const views = ['Overview', 'My task board', 'Today', 'Week planner', 'Calendar', 'Upcoming', 'Long-term goals', 'Completed', 'Archived tasks', 'Life task library', 'Printable tracker', 'Direction & quotes', 'Settings & backup'];
-const require = createRequire(import.meta.url);
-let axePath: string | undefined;
-try { axePath = require.resolve('@axe-core/playwright'); } catch { /* Optional dependency: never install it for these specs. */ }
+const darkViews = ['Today', 'My task board', 'Week planner', 'Calendar', 'Settings & backup'];
 
 async function tabTo(page: Page, target: Locator) {
   for (let i = 0; i < 100; i++) {
@@ -68,13 +66,22 @@ test('keyboard creates and saves a task, traps modal focus, and opens/closes car
   await page.reload(); await page.getByRole('button', { name: 'My task board', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Saved with keyboard', exact: true })).toBeVisible();
 });
-for (const view of views) {
-  test(`axe: ${view} has no serious or critical violations`, async ({ page }) => {
-    test.skip(!axePath, '@axe-core/playwright is not installed; optional scan skipped without installing.');
-    const { default: AxeBuilder } = await import(axePath!);
-    await page.getByRole('navigation').getByRole('button', { name: new RegExp(`^${view}(?:\\s*\\d+)?$`) }).click();
-    await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
-    const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations.filter((v: { impact: string }) => ['serious', 'critical'].includes(v.impact))).toEqual([]);
-  });
+for (const theme of ['light', 'dark'] as const) {
+  for (const view of theme === 'light' ? views : darkViews) {
+    test(`axe: ${view} (${theme}) has no serious or critical violations`, async ({ page }) => {
+      await page.evaluate(({ key, theme }) => {
+        const board = JSON.parse(localStorage.getItem(key)!);
+        board.theme = theme;
+        localStorage.setItem(key, JSON.stringify(board));
+      }, { key: STORAGE_KEY, theme });
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+      await page.getByRole('navigation').getByRole('button', { name: new RegExp(`^${view}(?:\\s*\\d+)?$`) }).click();
+      await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
+      const results = await new AxeBuilder({ page }).analyze();
+      expect(results.violations.filter(v => ['serious', 'critical'].includes(v.impact ?? '')).map(v => ({
+        rule: v.id, impact: v.impact, nodes: v.nodes.map(n => ({ target: n.target, summary: n.failureSummary })),
+      }))).toEqual([]);
+    });
+  }
 }

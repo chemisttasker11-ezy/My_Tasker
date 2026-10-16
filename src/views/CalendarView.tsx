@@ -321,7 +321,7 @@ export function CalendarView({ board, setBoard, tasks, completions, today, onEdi
             <div className="calendar-hour-body">{withTime.filter(item => Number(item.task.scheduledTime.slice(0, 2)) === hour).map(item => entry(item))}</div>
           </div>)}{otherHours.length > 0 && <div className="calendar-hour"><div className="calendar-hour-label">Other</div><div className="calendar-hour-body">{otherHours.map(item => entry(item))}</div></div>}</div>
         </section>}
-        {scale === 'week' && <div className="calendar-week-scroller"><div className="calendar-week" role="grid" aria-label="Weekly calendar">
+        {scale === 'week' && <div className="calendar-week-scroller"><div className="calendar-week" role="group" aria-label="Weekly calendar">
           {Array.from({ length: 7 }, (_, i) => addDays(range.start, i)).map(date => {
             const tasksOnDate = byDay.get(date) ?? [];
             const plannedOnDate = plannedByDate.get(date) ?? [];
@@ -344,7 +344,7 @@ export function CalendarView({ board, setBoard, tasks, completions, today, onEdi
                     openPlanModal(date, e.currentTarget);
                   }}
                   title={`Plan ${formatDate(date)}`}
-                  aria-label={`Plan ${date}`}
+                  aria-label={`Plan ${date}, ${WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]} ${date.slice(-2)}`}
                 >
                   <span>{WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]}</span>
                   <strong>{date.slice(-2)}</strong>
@@ -368,7 +368,7 @@ export function CalendarView({ board, setBoard, tasks, completions, today, onEdi
             </section>;
           })}
         </div></div>}
-        {scale === 'month' && <div className="panel calendar-month" role="grid" aria-label="Monthly calendar">
+        {scale === 'month' && <div className="panel calendar-month" role="group" aria-label="Monthly calendar">
           <div className="calendar-weekdays">{WEEKDAYS.map(day => <span key={day}>{day}</span>)}</div>
           <div className="calendar-month-grid">{monthDates(anchor).map(date => {
             const tasksOnDate = byDay.get(date) ?? [];
@@ -400,7 +400,7 @@ export function CalendarView({ board, setBoard, tasks, completions, today, onEdi
                     openPlanModal(date, e.currentTarget);
                   }}
                   title={`Plan ${formatDate(date)}`}
-                  aria-label={`Plan ${date}`}
+                  aria-label={`Plan ${date}, day ${Number(date.slice(-2))}`}
                 >
                   {Number(date.slice(-2))}
                 </button>
