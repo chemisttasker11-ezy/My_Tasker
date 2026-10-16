@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { nextDueDate } from './time';
 import { createTask, initialState } from './factory';
+import { validateImported } from './validation';
 import { setCalendarOccurrenceStatus } from './taskActions';
 import { saveWeekReview, toggleDailyFocus } from './weekActions';
 
 describe('PR3 selected PR2 regression fixes', () => {
+  it('restores missing area definitions without reassigning saved tasks', () => {
+    const task=createTask({title:'Private category',category:'Research'});
+    const incoming={...initialState(),tasks:[task]};
+    const result=validateImported(incoming);
+    expect(result.areas.some(a=>a.id==='Research')).toBe(true);
+    expect(result.tasks[0].category).toBe('Research');
+  });
   it('writes an older calendar occurrence to its own period without moving the recurrence series', () => {
     const task=createTask({title:'Routine',recurrence:'daily',dueDate:'2026-10-14',scheduleAnchor:'2026-10-14'});
     const original={...initialState(),tasks:[task]};
