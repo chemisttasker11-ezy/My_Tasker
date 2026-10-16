@@ -3,7 +3,7 @@ import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
 import { createTaskController } from './controllers/taskController';
 import { importBoardWithRecovery } from './controllers/backupController';
-import { type Category, type Lane, type Priority, type Task, type View, createTask, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
+import { type Category, type Lane, type Priority, type Task, type View, createTask, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted } from './model';
 import { addEntry } from './lib/planning';
 import type { ParsedQuickAdd } from './lib/quickAdd';
 import { downloadable } from './lib/display';
