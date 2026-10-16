@@ -1,0 +1,4 @@
+/* PR3: independent single-task focus overlay; no changes to cloud persistence. */
+.pr3-focus-overlay { position: fixed; inset: 0; z-index: 1000; background: var(--bg, #f0f6ff); overflow: auto; }
+.pr3-quick-add { margin: 0 0 16px; }
+@media (prefers-reduced-motion: reduce) { .pr3-focus-overlay * { scroll-behavior: auto !important; } }
