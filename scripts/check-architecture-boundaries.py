@@ -14,7 +14,10 @@ ERRORS=[]
 # excluded: they are not models/controllers and are not duplicating behaviour.
 LIMITS={
     "src/model.ts": 3000,                           # compatibility exports only
-    "src/App.tsx": 16000,                           # now just orchestration; work belongs in hooks/controllers
+    "src/App.tsx": 16000,
+    "src/hooks/useBoardPersistence.ts": 11500,
+    "src/lib/pendingDraftStore.ts": 6500,
+    "src/components/DraftRecoveryDialog.tsx": 6500,                           # now just orchestration; work belongs in hooks/controllers
     "src/views/CalendarView.tsx": 16500,           # shared header/dialogs extracted
     "src/views/WeekPlannerView.tsx": 9000,         # split week-specific visual panels
     "src/components/weekly/LegacyWeekSchedule.tsx": 6000,
@@ -75,7 +78,7 @@ entry=(ROOT/"src/main.tsx").read_text(encoding="utf-8")
 if "<AuthGate" not in entry or "<App" in entry:
     ERRORS.append("Production entry must use the AuthGate; no direct unauthenticated App.")
 app=(ROOT/"src/App.tsx").read_text(encoding="utf-8")
-for anti in ("saveCloudBoard(","loadCloudBoard(","localStorage.setItem(STORAGE_KEY"):
+for anti in ("saveCloudBoard(","loadCloudBoard(","savePendingDraft(","localStorage.setItem(STORAGE_KEY"):
     if anti in app:
         ERRORS.append(f"App contains persistence implementation {anti} rather than delegating to useBoardPersistence.")
 for owner in ("src/hooks/useBoardPersistence.ts","src/hooks/usePlanningController.ts",

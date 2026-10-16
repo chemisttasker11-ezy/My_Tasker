@@ -80,4 +80,33 @@ test.describe('@auth-gate @real-server React Django PostgreSQL',()=>{
     await expect(b.page.getByRole('alert')).toContainText('Another device saved newer changes');
     await Promise.all([a.close(),b.close()]);
   });
+
+  test('crash recovery keeps an unsent edit and saves it through the actual PostgreSQL API after consent',async({browser})=>{
+    test.setTimeout(120000);
+    const session=await signIn(browser,'bob@ci.mytasker.test');
+    const title='Recovered from failed PostgreSQL save';
+    const revision=(await data(session.page)).revision;
+    await session.page.route('**/api/board/',async route=>{
+      if(route.request().method()==='PUT')return route.fulfill({
+        status:503,contentType:'application/json',body:JSON.stringify({detail:'Network failed during save'})
+      });
+      await route.continue();
+    });
+    await create(session.page,title);
+    await expect(session.page.getByRole('alert').filter({hasText:'Changes not synced.'})).toBeVisible({timeout:25000});
+    expect((await data(session.page)).revision).toBe(revision);
+    await session.page.unroute('**/api/board/');
+    await session.page.reload();
+    const prompt=session.page.getByRole('dialog',{name:'Your progress is still here.'});
+    await expect(prompt).toBeVisible({timeout:15000});
+    await expect(prompt.getByRole('button',{name:'Restore edits'})).toBeEnabled();
+    await prompt.getByRole('button',{name:'Restore edits'}).click();
+    await expect.poll(async()=> (await data(session.page)).board?.tasks.some(t=>t.title===title),{timeout:25000}).toBe(true);
+    await expect.poll(()=> session.page.evaluate(()=>
+      Object.keys(localStorage).filter(key=>key.startsWith('mytasker:unsynced:v1:')).length),{timeout:25000}).toBe(0);
+    await session.page.reload();
+    await expect(session.page.getByRole('dialog',{name:'Your progress is still here.'})).not.toBeVisible();
+    await session.close();
+  });
+
 });

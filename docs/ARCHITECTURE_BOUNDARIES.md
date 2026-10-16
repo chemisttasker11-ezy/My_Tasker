@@ -16,7 +16,9 @@ Enforced by `scripts/check-architecture-boundaries.py` on every PR acceptance ru
 | `src/model.ts` | Re-exports for backward compatibility only | New business logic |
 | `src/lib/planning.ts` | Pure independent dated plan reducers/copy/drag policy | Network calls |
 | `src/hooks/usePlanningController.ts` | Planner UI commands and day clipboard | New task-domain rules |
-| `src/hooks/useBoardPersistence.ts` | Local-demo storage, cloud revisions and safe save/conflicts | View composition |
+| `src/hooks/useBoardPersistence.ts` | Local-demo storage, cloud revisions, durable draft orchestration and safe save/conflicts | View composition |
+| `src/lib/pendingDraftStore.ts` | Account-scoped browser recovery journal with exact server ACK cleanup | Authentication, networking, React or conflict resolution |
+| `src/components/DraftRecoveryDialog.tsx` | Accessible explicit Restore/Download/Discard recovery choices | Data writes or backend revision validation |
 | `src/components/WorkspaceChrome.tsx` | Navigation, responsive shell, topbar | Task or account data writes |
 | `src/views/CalendarView.tsx` | Calendar projections and displayed grid | Modal/header implementation |
 | `src/views/WeekPlannerView.tsx` | Seven-day page coordination, intention and summary | Recurring table, commitment editor, review form |

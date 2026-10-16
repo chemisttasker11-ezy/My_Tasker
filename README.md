@@ -31,6 +31,35 @@ Planner data shape and reducers are owned by `src/domain/*`, independent day/cop
 
 Django endpoints are separated between account auth, private boards, system health, MFA setup, privileged user mutations and admin reporting. Compatibility facades preserve existing import contracts. CI enforces ownership/complexity bounds via `scripts/check-architecture-boundaries.py`. See [architecture contract](docs/ARCHITECTURE_BOUNDARIES.md).
 
+## Online-first resilience and unsent edits
+
+Signed-in task changes are saved to the server with revision checking. Before the
+debounced save, My Tasker also stores a temporary **account-scoped recovery draft
+in this browser** so an interrupted connection, tab crash or reload need not lose
+the unsent edits.
+
+- After signing in again, a recovery dialog offers **Restore edits**, **Download
+  draft**, or **Discard this draft**. None of these actions silently replaces the
+  server state. Download an important draft before deleting it.
+- **Restore is allowed only when the saved server revision still matches the one
+  the draft was based on.** If another device has saved a newer version, Restore
+  is disabled; export the draft and reconcile it manually.
+- A successful confirmed server save clears only drafts that match that exact
+  acknowledged board. Newer unsent edits and drafts from other tabs remain
+  intact. Logging into a different account does not surface another user's draft.
+- **Privacy:** device recovery copies are stored unencrypted in that browser's
+  origin storage, even after a crash. Only use trusted devices; never enter
+  patient-identifiable or highly confidential records. Clear local drafts
+  explicitly when finished. Disabling browser storage removes this safety net.
+- My Tasker is **online-first**, not an offline-authenticated application.
+  Internet access is needed to log in and safely compare account revisions.
+  Browser private mode, quota limits and deleted browsing data can defeat local
+  recovery. JSON export remains the independent backup.
+
+The CI includes unit tests for per-account and multi-tab isolation, a browser
+crash/reload scenario with revision conflicts, and a React→Django→PostgreSQL
+recovery journey. These do not substitute for live OVH hostname and device tests.
+
 ## Local development
 
 Install **Node.js 22+** and **Python 3.12+**.
