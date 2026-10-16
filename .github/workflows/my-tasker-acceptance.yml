@@ -5,6 +5,10 @@ on:
       - 'src/**'
       - 'server/**'
       - 'deploy/**'
+      - 'Dockerfile'
+      - 'docker-compose*.yml'
+      - 'scripts/deploy-mytasker*.sh'
+      - '.dockerignore'
       - 'tests/**'
       - 'package*.json'
       - '.github/workflows/my-tasker-acceptance.yml'
@@ -51,7 +55,7 @@ jobs:
         env:
           VITE_DEMO_MODE: '1'
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: playwright-report
           path: |
@@ -74,7 +78,7 @@ jobs:
         env:
           VITE_DEMO_MODE: '0'
       - uses: actions/upload-artifact@v4
-        if: failure()
+        if: always()
         with:
           name: auth-browser-report
           path: |
@@ -141,3 +145,37 @@ jobs:
           python server/manage.py check
           python server/manage.py makemigrations --check --dry-run
           python server/manage.py test accounts --verbosity 2
+  container-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment shell scripts
+        run: bash -n scripts/deploy-mytasker.sh scripts/deploy-mytasker-staging.sh scripts/smoke-mytasker.sh
+      - name: Generate disposable Compose environment files
+        run: |
+          mkdir -p env
+          printf '%s\n' 'MYTASKER_HOST=example.test' 'MYTASKER_DB_PASSWORD=ci-only-password' > env/ci-values.env
+          cp env/ci-values.env env/mytasker.prod.env
+          cp env/ci-values.env env/mytasker.staging.env
+      - name: Validate production and staging Docker Compose
+        run: |
+          docker compose --env-file env/ci-values.env -f docker-compose.prod.yml config --quiet
+          docker compose --env-file env/ci-values.env -f docker-compose.staging.yml config --quiet
+      - name: Build exact production image
+        run: docker build --tag mytasker-acceptance:ci --file Dockerfile .
+      - name: Run Django checks inside production image
+        env:
+          DEBUG: 'True'
+        run: |
+          docker run --rm --entrypoint python \
+            --env DEBUG=True \
+            --env SECRET_KEY=ci-acceptance-key-for-test-only-not-live \
+            --env ADMIN_TOTP_ENCRYPTION_KEY=ci-test-only \
+            --env ALLOWED_HOSTS=localhost \
+            --env DATABASE_URL=sqlite:////tmp/mytasker-test.sqlite3 \
+            mytasker-acceptance:ci /app/server/manage.py check
+      - name: Ensure the built image includes the bundled React UI
+        run: |
+          docker run --rm --entrypoint python mytasker-acceptance:ci \
+            -c "from pathlib import Path; p=Path('/app/dist/index.html'); assert p.exists(); assert '/assets/' in p.read_text()"
