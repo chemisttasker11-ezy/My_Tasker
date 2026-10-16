@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'src/**'
+      - 'server/**'
+      - 'deploy/**'
       - 'tests/**'
       - 'package*.json'
       - '.github/workflows/my-tasker-acceptance.yml'
@@ -45,7 +47,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --grep-invert '@auth-gate'
+        env:
+          VITE_DEMO_MODE: '1'
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -54,3 +58,86 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+  auth-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise the real authenticated entry point with mocked transport
+        run: npm run test:e2e -- tests/auth-gate.spec.ts
+        env:
+          VITE_DEMO_MODE: '0'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: auth-browser-report
+          path: |
+            playwright-report/
+            test-results/
+  django-sqlite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: pip install -r server/requirements.txt
+      - name: Provide test-only secrets
+        run: |
+          echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+          echo "ADMIN_TOTP_ENCRYPTION_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+      - name: Validate Django configuration and migration model
+        run: |
+          python server/manage.py check
+          python server/manage.py makemigrations --check --dry-run
+        env:
+          DEBUG: 'True'
+      - run: python server/manage.py test accounts --verbosity 2
+        env:
+          DEBUG: 'True'
+  django-postgresql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mytasker_test
+          POSTGRES_PASSWORD: test_only_password
+          POSTGRES_DB: mytasker_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mytasker_test -d mytasker_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 8
+    env:
+      DATABASE_URL: postgres://mytasker_test:test_only_password@127.0.0.1:5432/mytasker_ci
+      DEBUG: 'True'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: pip install -r server/requirements.txt
+      - name: Provide test-only secrets
+        run: |
+          echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+          echo "ADMIN_TOTP_ENCRYPTION_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+      - name: Test Django schema and user isolation on PostgreSQL
+        run: |
+          python server/manage.py check
+          python server/manage.py makemigrations --check --dry-run
+          python server/manage.py test accounts --verbosity 2
