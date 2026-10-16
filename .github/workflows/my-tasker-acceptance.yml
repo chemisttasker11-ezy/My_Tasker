@@ -145,6 +145,85 @@ jobs:
           python server/manage.py check
           python server/manage.py makemigrations --check --dry-run
           python server/manage.py test accounts --verbosity 2
+  real-stack-postgresql:
+    name: React → Django → PostgreSQL acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mytasker_integration
+          POSTGRES_PASSWORD: integration_ci_only
+          POSTGRES_DB: mytasker_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mytasker_integration -d mytasker_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://mytasker_integration:integration_ci_only@127.0.0.1:5432/mytasker_e2e
+      DEBUG: 'True'
+      EMAIL_BACKEND: django.core.mail.backends.locmem.EmailBackend
+      VITE_DEMO_MODE: '0'
+      ALLOWED_HOSTS: 127.0.0.1,localhost
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: npm ci
+      - run: pip install -r server/requirements.txt
+      - run: npx playwright install --with-deps chromium
+      - name: Provide disposable integration secrets
+        run: |
+          echo "SECRET_KEY=$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" >> "$GITHUB_ENV"
+          echo "ADMIN_TOTP_ENCRYPTION_KEY=$(python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')" >> "$GITHUB_ENV"
+      - name: Bootstrap disposable verified users and PostgreSQL migrations
+        run: |
+          python server/manage.py migrate --noinput
+          python - <<'PY'
+          import os,sys,django
+          sys.path.insert(0,'server')
+          os.environ.setdefault('DJANGO_SETTINGS_MODULE','my_tasker_server.settings')
+          django.setup()
+          from django.contrib.auth import get_user_model
+          from accounts.models import VerifiedEmail
+          for email in ('alice@ci.mytasker.test','bob@ci.mytasker.test'):
+              user=get_user_model().objects.create_user(
+                  username=email,email=email,password='IntegrationOnlyPassword#2026',is_active=True)
+              VerifiedEmail.objects.create(user=user)
+          PY
+      - name: Start actual Django API on loopback
+        run: |
+          nohup python server/manage.py runserver --noreload 127.0.0.1:8000 > /tmp/mytasker-django.log 2>&1 &
+          for step in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:8000/healthz/ > /dev/null; then
+              echo "Django API ready"; exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/mytasker-django.log
+          exit 1
+      - name: Test actual browser session, storage, conflicts and account isolation
+        run: npm run test:e2e -- tests/live-django-postgres.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: real-stack-integration-report
+          path: |
+            playwright-report/
+            test-results/
+            /tmp/mytasker-django.log
+          retention-days: 7
   container-acceptance:
     runs-on: ubuntu-latest
     timeout-minutes: 30
