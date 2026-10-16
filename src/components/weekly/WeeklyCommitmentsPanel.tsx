@@ -5,13 +5,13 @@ import { STATUS_LABEL } from '../../lib/progress';
 import { PRIORITY_WEIGHTS, scoreWeek } from '../../lib/scoring';
 
 interface Props {
-  summary: ReturnType<typeof scoreWeek>; plannedIds:Set<string>;
+  summary: ReturnType<typeof scoreWeek>;
   candidates:Task[];backlog:Task[];weekStart:string;
   onInclude:(weekStart:string,taskId:string,include:boolean)=>void;
   onEdit:(task:Task|null,lane?:Lane,defaultDate?:string)=>void;
 }
 /** Commitments retain outstanding work even when dated copies move away. */
-export function WeeklyCommitmentsPanel({summary,plannedIds,candidates,backlog,weekStart,onInclude,onEdit}:Props){
+export function WeeklyCommitmentsPanel({summary,candidates,backlog,weekStart,onInclude,onEdit}:Props){
   return <section className="panel week-commitments" aria-label="Committed tasks">
         <header className="week-panel-head"><div><h2>My commitments</h2><p>{summary.planned} selected · Postponed work still counts in this week's score.</p></div><Flag size={19}/></header>
         {summary.items.length ? <div className="week-commit-list">{summary.items.map(item => <div className="week-commit-row" key={item.commitment.entryId ?? item.commitment.taskId}>

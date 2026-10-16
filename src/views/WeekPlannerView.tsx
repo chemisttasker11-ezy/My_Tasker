@@ -88,7 +88,7 @@ export function WeekPlannerView({ board, planActions, onCapacity, today, navigat
     <LegacyWeekSchedule board={board} days={days} scheduled={scheduled} today={today}
       plannedIds={plannedIds} weekStart={weekStart} onEdit={onEdit} onFocus={onFocus} onInclude={onInclude}/>
     <div className="week-bottom-grid">
-      <WeeklyCommitmentsPanel summary={summary} plannedIds={plannedIds} candidates={candidates}
+      <WeeklyCommitmentsPanel summary={summary} candidates={candidates}
         backlog={backlog} weekStart={weekStart} onInclude={onInclude} onEdit={onEdit}/>
       <WeeklyReviewPanel key={weekStart} plan={plan} planned={summary.planned} weekStart={weekStart} onReview={onReview}/>
     </div>
