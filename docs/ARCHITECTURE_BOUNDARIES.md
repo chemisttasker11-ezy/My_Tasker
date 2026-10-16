@@ -24,6 +24,11 @@ Enforced by `scripts/check-architecture-boundaries.py` on every PR acceptance ru
 | `src/components/weekly/WeeklyCommitmentsPanel.tsx` | Weighted commitment list and task candidates | Saving the score |
 | `src/components/weekly/WeeklyReviewPanel.tsx` | Weekly reflection draft, keyed to the chosen week | Global week state |
 | `src/lib/boardSummary.ts` | Pure today/overview projection and actual completion-date counts | React, storage or network |
+| `src/components/AdminDashboard.tsx` | Admin tabs, session-verified controller and feedback | Large reports or complex list forms |
+| `src/components/admin/AdminOverviewPanel.tsx` | Counts and recent activity | Per-user board payloads |
+| `src/components/admin/AdminUsersPanel.tsx` | Search, listing and delegated account actions | Direct network requests, private task data |
+| `src/components/admin/AdminAuditPanel.tsx` | Audit trail paging | Authentication/permission logic |
+| `src/components/admin/AdminSecurityPanel.tsx` | Service health view | Secrets or privileged state mutation |
 | `src/components/calendar/*` | Reusable navigation + day/copy planning dialogs | Date/recurrent task mutations |
 | `src/App.tsx` | Thin orchestrator of pages/handlers | Direct cloud save and schema validation |
 

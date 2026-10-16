@@ -21,6 +21,11 @@ LIMITS={
     "src/components/weekly/WeeklyCommitmentsPanel.tsx": 6000,
     "src/components/weekly/WeeklyReviewPanel.tsx": 4000,
     "src/lib/boardSummary.ts": 4500,                # single pure derived projection
+    "src/components/AdminDashboard.tsx": 7000,      # only tabs, authorised actions and loading
+    "src/components/admin/AdminOverviewPanel.tsx": 4000,
+    "src/components/admin/AdminUsersPanel.tsx": 4500,
+    "src/components/admin/AdminAuditPanel.tsx": 3000,
+    "src/components/admin/AdminSecurityPanel.tsx": 3000,
     "server/accounts/views.py": 1300,              # compatibility facade only
     "server/accounts/admin_api.py": 1300,          # compatibility facade only
     "server/accounts/admin_common.py": 3000,
