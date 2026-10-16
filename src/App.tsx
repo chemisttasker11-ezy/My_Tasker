@@ -1,6 +1,6 @@
 import { type Dispatch, type SetStateAction, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, CalendarDays, CalendarRange, BarChart3, Check, CheckCircle2, ChevronRight, LayoutDashboard, ListTodo, Menu, Moon, Plus, Settings2, Sparkles, Sun, Target, X } from 'lucide-react';
-import { type TaskEditSnapshot, taskEditConflicts, type BoardState, type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, periodKey, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, loadBoard, preserveRaw, writeBoard, rescheduleTask, saveTaskChanges, saveWeekReview, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
+import { BoardUpdateQueue, type TaskEditSnapshot, taskEditConflicts, type BoardState, type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, periodKey, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, loadBoard, preserveRaw, writeBoard, rescheduleTask, saveTaskChanges, saveWeekReview, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
 import { activeItem, downloadable, LANE_LABEL, longToday } from './lib/display';
 import { RecoveryScreen, OnboardingCard } from './components/BoardSafety';
 import { TaskEditor } from './components/TaskEditor';
@@ -37,54 +37,54 @@ const NAV: { id: View; label: string }[] = [
 export default function App() {
   const [loaded] = useState(loadBoard);
   const [board, updateBoard] = useState<BoardState>(loaded.board);
-  const boardRef = useRef(board);
+  const [boardRef] = useState(() => new BoardUpdateQueue(board, updateBoard));
   const rawRef = useRef(loaded.raw);
   const [conflictBackup, setConflictBackup] = useState('');
   const dirtyRef = useRef(false);
   const [recovery, setRecovery] = useState(loaded.recovery);
   const recoveryRef = useRef(loaded.recovery);
-  const queue = useRef(Promise.resolve());
   const externalRevision = useRef(0);
   const setBoard: Dispatch<SetStateAction<BoardState>> = action => changeBoard(action);
   function changeBoard(action: SetStateAction<BoardState>, callbacks?: { onApplied: () => void; onConflict: (current: BoardState) => void }) {
+    if (recoveryRef.current) return;
+    const current = boardRef.current;
+    const next = typeof action === 'function' ? action(current) : action;
+    if (next === current) { if (!callbacks) setNotice('No change was saved. The selection may be unavailable or a board limit has been reached.'); return; }
+    const warnings: string[] = [];
+    try { validateImported(next, warnings); } catch (err) { setNotice(err instanceof Error ? err.message : 'Invalid change'); return; }
+    if (warnings.length) { setNotice(`Change not saved: ${warnings.join(' ')}`); return; }
     const observedRevision = externalRevision.current;
-    queue.current = queue.current.then(async () => {
-      const apply = () => {
+    boardRef.enqueue(next, async () => {
+      const apply = (): BoardState | undefined => {
         if (recoveryRef.current) return;
         if (observedRevision !== externalRevision.current) {
           if (callbacks) callbacks.onConflict(boardRef.current);
           else setNotice('Another tab changed the board; this change was not applied.');
           return;
         }
-        const current = boardRef.current;
-        const next = typeof action === 'function' ? action(current) : action;
-        if (next === current) { if (!callbacks) setNotice('No change was saved. The selection may be unavailable or a board limit has been reached.'); return; }
         try {
-          const warnings: string[] = [];
-          try { validateImported(next, warnings); } catch (err) { setNotice(err instanceof Error ? err.message : 'Invalid change'); return; }
-          if (warnings.length) { setNotice(`Change not saved: ${warnings.join(' ')}`); return; }
           const saved = writeBoard(rawRef.current, next);
-          dirtyRef.current = false; rawRef.current = saved.raw; boardRef.current = saved.board; updateBoard(saved.board); setSaveError(false); callbacks?.onApplied();
+          dirtyRef.current = false; rawRef.current = saved.raw; setSaveError(false); callbacks?.onApplied();
+          return saved.board;
         } catch (error) {
           if (error instanceof Error && error.message === 'conflict') {
             const incoming = loadBoard();
-            setConflictBackup(JSON.stringify(next, null, 2));
+            setConflictBackup(JSON.stringify(boardRef.current, null, 2));
             rawRef.current = incoming.raw;
             dirtyRef.current = false;
             externalRevision.current++;
             if (incoming.recovery) { recoveryRef.current = incoming.recovery; setRecovery(incoming.recovery); }
-            else { rawRef.current = incoming.raw; boardRef.current = incoming.board; updateBoard(incoming.board); }
+            else boardRef.replace(incoming.board);
             if (callbacks && !incoming.recovery) callbacks.onConflict(incoming.board);
             else setNotice('Another tab changed this board. The newer board was loaded; your attempted change was not applied.');
           } else {
-            dirtyRef.current = true; boardRef.current = next; updateBoard(next); setSaveError(true); callbacks?.onApplied();
+            dirtyRef.current = true; setSaveError(true); callbacks?.onApplied();
           }
         }
       };
-      if (navigator.locks) await navigator.locks.request(STORAGE_KEY, apply);
-      else apply();
-    }).catch(() => { setSaveError(true); setNotice('The save could not complete. Download your data before leaving.'); });
-  };
+      return navigator.locks ? navigator.locks.request(STORAGE_KEY, apply) : apply();
+    }, () => { dirtyRef.current = true; setSaveError(true); setNotice('The save could not complete. Download your data before leaving.'); });
+  }
   const [view, setView] = useState<View>('overview');
   const [selectedLane, setSelectedLane] = useState<Lane>('urgent');
   const [editor, setEditor] = useState<{ task: Task | null; lane: Lane; date?: string; isCopy?: boolean; snapshot: TaskEditSnapshot } | null>(null);
@@ -129,10 +129,11 @@ export default function App() {
         return;
       }
       const incoming = loadBoard();
+      if (boardRef.hasPending) setConflictBackup(JSON.stringify(boardRef.current, null, 2));
       externalRevision.current++;
       rawRef.current = incoming.raw;
       if (incoming.recovery) { recoveryRef.current = incoming.recovery; setRecovery(incoming.recovery); }
-      else { rawRef.current = incoming.raw; boardRef.current = incoming.board; updateBoard(incoming.board); setNotice('Updated board loaded from another tab.'); }
+      else { rawRef.current = incoming.raw; boardRef.replace(incoming.board); setNotice('Updated board loaded from another tab.'); }
     };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
@@ -262,7 +263,7 @@ export default function App() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw !== rawRef.current) {
         const incoming = loadBoard(); rawRef.current = incoming.raw;
-        if (!incoming.recovery) { boardRef.current = incoming.board; updateBoard(incoming.board); recoveryRef.current = undefined; setRecovery(undefined); setNotice('Another tab restored the board. Your replacement was not applied.'); return; }
+        if (!incoming.recovery) { boardRef.replace(incoming.board); recoveryRef.current = undefined; setRecovery(undefined); setNotice('Another tab restored the board. Your replacement was not applied.'); return; }
       }
       if (raw !== null) preserveRaw(raw, 'recovery');
       rawRef.current = raw;
@@ -270,7 +271,7 @@ export default function App() {
       const revised = { ...next, revision: 0 };
       const encoded = JSON.stringify(revised);
       localStorage.setItem(STORAGE_KEY, encoded);
-      rawRef.current = encoded; boardRef.current = revised; updateBoard(revised);
+      rawRef.current = encoded; boardRef.replace(revised);
       recoveryRef.current = undefined; setRecovery(undefined); setSaveError(false);
     } catch { setSaveError(true); }
     };

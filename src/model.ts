@@ -351,6 +351,27 @@ export function initialState(): BoardState {
   return { version: 1, revision: 0, weeklyScoreEnabled: false, onboardingStep: 1, areas: NEUTRAL_AREAS.map(a => ({ ...a })), theme: 'light', completions: [], weekPlans: {}, dailyFocus: {}, tasks: [] };
 }
 
+/** Publish edits synchronously for controlled inputs; serialize only persistence.
+ * An older completed write must never replace a newer local edit or an external reload.
+ */
+export class BoardUpdateQueue {
+  current: BoardState;
+  private pending: Promise<void> = Promise.resolve();
+  private pendingCount = 0;
+  constructor(initial: BoardState, private publish: (board: BoardState) => void) { this.current = initial; }
+  get hasPending(): boolean { return this.pendingCount > 0; }
+  replace(board: BoardState): void { this.current = board; this.publish(board); }
+  enqueue(next: BoardState, persist: () => Promise<BoardState | undefined>, onError: () => void): void {
+    this.replace(next);
+    this.pendingCount++;
+    this.pending = this.pending.then(async () => {
+      const saved = await persist();
+      if (saved && this.current === next) this.replace(saved);
+    }).catch(onError).finally(() => { this.pendingCount--; });
+  }
+  whenIdle(): Promise<void> { return this.pending; }
+}
+
 export const STORAGE_KEY = 'my-command-centre:v1';
 export interface LoadedBoard { board: BoardState; raw: string | null; recovery?: string; warning?: string; storageError?: boolean }
 export function preserveRaw(raw: string, kind: 'backup' | 'recovery', storage: Storage = localStorage): string {

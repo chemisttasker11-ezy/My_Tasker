@@ -171,7 +171,7 @@ describe('simple statuses, postponing and independent copies', () => {
 });
 
 
-import { loadBoard, writeBoard, preserveRaw, STORAGE_KEY, LIMITS, saveTaskChanges, setWeekCommitment, saveWeekReview, toggleDailyFocus } from './model';
+import { BoardUpdateQueue, loadBoard, writeBoard, preserveRaw, STORAGE_KEY, LIMITS, saveTaskChanges, setWeekCommitment, saveWeekReview, toggleDailyFocus } from './model';
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
   return { get length() { return values.size; }, clear: () => values.clear(), key: i => [...values.keys()][i] ?? null,
@@ -321,5 +321,74 @@ describe('task editor conflict rule', () => {
     const task = createTask({ title: 'New' }); const snapshot = { revision: 0, task: null };
     expect(taskEditConflicts(snapshot, { ...emptyState(), revision: 2 }, task.id)).toBe(false);
     expect(taskEditConflicts(snapshot, { ...emptyState(), revision: 2, tasks: [task] }, task.id)).toBe(true);
+  });
+});
+
+
+describe('immediate same-tab updates with serialized persistence', () => {
+  it('updates the score checkbox immediately after onboarding and starters, before the storage lock resolves', async () => {
+    const { addLifeTemplates, STARTER_IDS } = await import('./lib/lifeLibrary');
+    const storage = memoryStorage();
+    let raw: string | null = null;
+    let rendered = emptyState();
+    const updates = new BoardUpdateQueue(rendered, board => { rendered = board; });
+    const edit = (action: (board: typeof rendered) => typeof rendered, wait = Promise.resolve()) => {
+      const next = action(updates.current);
+      updates.enqueue(next, async () => {
+        await wait;
+        const saved = writeBoard(raw, next, storage);
+        raw = saved.raw;
+        return saved.board;
+      }, () => { throw new Error('Unexpected storage failure'); });
+    };
+    edit(board => ({ ...board, onboardingStep: 2 })); await updates.whenIdle();
+    edit(board => ({ ...board, onboardingStep: undefined })); await updates.whenIdle();
+    edit(board => addLifeTemplates(board, STARTER_IDS)); await updates.whenIdle();
+    expect(rendered.tasks).toHaveLength(12);
+    let release!: () => void;
+    const lock = new Promise<void>(resolve => { release = resolve; });
+    edit(board => ({ ...board, weeklyScoreEnabled: true }), lock);
+    // React must receive the new checked value in the change event, not after the Web Lock.
+    expect(rendered.weeklyScoreEnabled).toBe(true);
+    expect(JSON.parse(storage.getItem(STORAGE_KEY)!).weeklyScoreEnabled).toBe(false);
+    release(); await updates.whenIdle();
+    expect(loadBoard(storage).board.weeklyScoreEnabled).toBe(true);
+    expect(loadBoard(storage).board.tasks).toHaveLength(12);
+  });
+  it('does not roll back later local edits when an earlier queued write finishes', async () => {
+    const storage = memoryStorage(); let raw: string | null = null; let rendered = emptyState();
+    const updates = new BoardUpdateQueue(rendered, board => { rendered = board; });
+    const first = { ...updates.current, weeklyScoreEnabled: true };
+    let release!: () => void;
+    const lock = new Promise<void>(resolve => { release = resolve; });
+    const persisted: number[] = [];
+    updates.enqueue(first, async () => {
+      await lock; const saved = writeBoard(raw, first, storage); raw = saved.raw;
+      persisted.push(saved.board.revision!); return saved.board;
+    }, () => { throw new Error('Unexpected failure'); });
+    const second = { ...updates.current, theme: 'dark' as const, tasks: [createTask({ title: 'Keep this edit' })] };
+    updates.enqueue(second, async () => {
+      expect(rendered).toBe(second);
+      const saved = writeBoard(raw, second, storage); raw = saved.raw;
+      persisted.push(saved.board.revision!); return saved.board;
+    }, () => { throw new Error('Unexpected failure'); });
+    expect(rendered).toBe(second); release(); await updates.whenIdle();
+    expect(persisted).toEqual([1, 2]);
+    expect(rendered).toMatchObject({ theme: 'dark', weeklyScoreEnabled: true, revision: 2 });
+    expect(loadBoard(storage).board.tasks[0].title).toBe('Keep this edit');
+  });
+  it('keeps an external reload when a pending local write encounters a conflict', async () => {
+    const storage = memoryStorage(); const first = writeBoard(null, emptyState(), storage);
+    let rendered = first.board; const updates = new BoardUpdateQueue(rendered, board => { rendered = board; });
+    const theirs = writeBoard(first.raw, { ...first.board, theme: 'dark' }, storage);
+    let rejected = false;
+    updates.enqueue({ ...first.board, weeklyScoreEnabled: true }, async () => {
+      try { return writeBoard(first.raw, updates.current, storage).board; }
+      catch { rejected = true; updates.replace(loadBoard(storage).board); return undefined; }
+    }, () => { throw new Error('Unexpected failure'); });
+    await updates.whenIdle();
+    expect(rejected).toBe(true);
+    expect(rendered).toEqual(theirs.board);
+    expect(storage.getItem(STORAGE_KEY)).toBe(theirs.raw);
   });
 });
