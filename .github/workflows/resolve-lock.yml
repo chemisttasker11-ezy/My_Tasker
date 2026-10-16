@@ -1,0 +1,37 @@
+name: Safe dependency lock refresh
+on:
+  push:
+    branches:
+      - feature/drag-planning-energy-ui
+    paths:
+      - package.json
+      - .github/workflows/resolve-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.ref == 'refs/heads/feature/drag-planning-energy-ui'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          ref: feature/drag-planning-energy-ui
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Resolve exact dependencies without lifecycle scripts
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit only resolved package lock
+        run: |
+          git diff --exit-code -- package.json || (echo "Resolver changed package.json unexpectedly" && exit 1)
+          if ! git diff --quiet -- package-lock.json; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add package-lock.json
+            git commit -m "chore: lock patched test runner dependency versions"
+            git push origin HEAD:feature/drag-planning-energy-ui
+          fi

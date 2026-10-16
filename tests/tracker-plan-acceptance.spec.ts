@@ -3,10 +3,14 @@ import { test, expect } from '@playwright/test';
 test.beforeEach(async({page})=>{await page.goto('/');await page.evaluate(()=>localStorage.clear());await page.reload()});
 test('vector PDF keeps planned Arabic/emoji visible as fallback images on one page',async({page})=>{
   const result=await page.evaluate(async()=>{
-    const { createTask, initialState }=await import('/src/model.ts');
-    const { addEntry, editEntry }=await import('/src/lib/planning.ts');
-    const { trackerData }=await import('/src/lib/tracker.ts');
-    const { buildTrackerDocument }=await import('/src/lib/trackerPdf.ts');
+    const modelPath: string = '/src/model.ts';
+    const { createTask, initialState }: typeof import('../src/model') =await import(/* @vite-ignore */ modelPath);
+    const planningPath: string = '/src/lib/planning.ts';
+    const { addEntry, editEntry }: typeof import('../src/lib/planning') =await import(/* @vite-ignore */ planningPath);
+    const trackerPath: string = '/src/lib/tracker.ts';
+    const { trackerData }: typeof import('../src/lib/tracker') =await import(/* @vite-ignore */ trackerPath);
+    const pdfPath: string = '/src/lib/trackerPdf.ts';
+    const { buildTrackerDocument }: typeof import('../src/lib/trackerPdf') =await import(/* @vite-ignore */ pdfPath);
     const date='2026-10-16';
     const task=createTask({title:'Clinical note',category:'Pharmacy',subtasks:[{id:'k',title:'Step واحد ✅',done:false}]});
     let board=addEntry({...initialState(),tasks:[task]},task.id,date);
