@@ -1,6 +1,8 @@
 import { useAreas } from '../lib/areas';
 import type { TrackerLaunch } from './TrackerView';
 import { useMemo, useState, type DragEvent } from 'react';
+import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace';
+import type { BoardState } from '../model';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
 import { type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
 import { addDays, calendarOccurrences, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
@@ -15,6 +17,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
 
 interface Props {
+  board: BoardState; planActions: PlanningActions;
   onTracker: (launch: TrackerLaunch) => void;
   tasks: Task[];
   completions: Completion[];
@@ -26,9 +29,10 @@ interface Props {
 }
 
 /** Task data lives in the domain model. The calendar only renders occurrences. */
-export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, onStatus, onReschedule, onTracker }: Props) {
+export function CalendarView({ board, planActions, tasks, completions, today, onEdit, onDuplicate, onStatus, onReschedule, onTracker }: Props) {
   const areas = useAreas();
   const [scale, setScale] = useState<CalendarScale>('month');
+  const [planningDay, setPlanningDay] = useState<string | null>(null);
   const [anchor, setAnchor] = useState(today);
   const [category, setCategory] = useState<Category | 'All'>('All');
   const [search, setSearch] = useState('');
@@ -43,6 +47,7 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
     for (const occurrence of occurrences) result.set(occurrence.date, [...result.get(occurrence.date) ?? [], occurrence]);
     return result;
   }, [occurrences]);
+  const plannedByDay = board.plannedEntries;
   const unscheduled = filtered.filter(task => !task.dueDate && !task.completedAt);
   const addAt = (date: string) => onEdit(null, 'urgent', date);
   const edit = (task: Task) => onEdit(task);
@@ -58,14 +63,20 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
     return { onDragOver: (event: DragEvent<HTMLElement>) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; },
       onDrop: (event: DragEvent<HTMLElement>) => dropTask(event, date) };
   }
-  function openDay(date: string) { setAnchor(date); setScale('day'); }
+  function openDay(date: string) { setPlanningDay(date); }
   const dayEntries = byDay.get(anchor) ?? [];
   const withTime = dayEntries.filter(item => item.task.scheduledTime);
   const anytime = dayEntries.filter(item => !item.task.scheduledTime);
   const otherHours = withTime.filter(item => { const h = Number(item.task.scheduledTime.slice(0, 2)); return h < 6 || h > 22; });
 
   return <>
-    <div className="page-title-row calendar-page-title"><div><span className="eyebrow">MAKE TIME FOR WHAT MATTERS</span><h1>Calendar <span className="heading-sparkle">✳</span></h1><p>Your tasks and appointments, on the dates you choose. Undated tasks stay unscheduled.</p></div><button className="button button-primary" onClick={() => addAt(anchor)}><Plus size={17}/> Add on {formatDate(anchor)}</button></div>
+    {planningDay && <div className="plan-day-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setPlanningDay(null);}}>
+      <section className="plan-day-dialog" role="dialog" aria-modal="true" aria-label={`Plan ${formatDate(planningDay)}`}>
+        <header className="plan-day-dialog-head"><h2>Plan {formatDate(planningDay)}</h2><button type="button" className="button button-primary" onClick={()=>setPlanningDay(null)}>Close planner</button></header>
+        <PlanWorkspace board={board} dates={[planningDay]} actions={planActions} title="Arrange this day" compact/>
+      </section>
+    </div>}
+    <div className="page-title-row calendar-page-title"><div><span className="eyebrow">MAKE TIME FOR WHAT MATTERS</span><h1>Calendar <span className="heading-sparkle">✳</span></h1><p>Tap a day to open its planner, add board tasks, rearrange independent copies and copy/paste plans.</p></div><button className="button button-primary" onClick={() => openDay(anchor)}><Plus size={17}/> Plan {formatDate(anchor)}</button></div>
     <section className="calendar-toolbar panel" aria-label="Calendar controls">
       <button className="button button-primary" onClick={() => onTracker({ anchor, scale, area: category })}>One-page view & PDF</button>
       <div className="calendar-navigation">
@@ -87,7 +98,7 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
     <div className="calendar-layout">
       <div className="calendar-main">
         {scale === 'day' && <section className="panel calendar-day">
-          <div className="calendar-day-heading"><CalendarDays size={19}/><h3>{dateTitle(anchor, 'day')}</h3><button type="button" className="button button-secondary" onClick={() => addAt(anchor)}><Plus size={15}/> Add task</button></div>
+          <div className="calendar-day-heading"><CalendarDays size={19}/><h3>{dateTitle(anchor, 'day')}</h3><button type="button" className="button button-secondary" onClick={() => openDay(anchor)}><Plus size={15}/> Plan day</button></div>
           <div className="calendar-anytime" {...dropProps(anchor)}><h3>Anytime</h3>{anytime.length ? anytime.map(item => entry(item)) : <p>Nothing scheduled without a time. Add a task or drag one here.</p>}</div>
           <div className="calendar-hours">{HOURS.map(hour => <div key={hour} className="calendar-hour" {...dropProps(anchor)}>
             <div className="calendar-hour-label">{String(hour).padStart(2, '0')}:00</div>
@@ -96,7 +107,7 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
         </section>}
         {scale === 'week' && <div className="calendar-week-scroller"><div className="calendar-week" role="grid" aria-label="Weekly calendar">
           {Array.from({ length: 7 }, (_, i) => addDays(range.start, i)).map(date => <section className={`calendar-week-day ${date === today ? 'is-today' : ''}`} key={date} data-testid={`calendar-date-${date}`} {...dropProps(date)}>
-            <div className="calendar-week-heading"><button onClick={() => openDay(date)}><span>{WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]}</span><strong>{date.slice(-2)}</strong></button><button aria-label={`Add task on ${date}`} onClick={() => addAt(date)}><Plus size={15}/></button></div>
+            <div className="calendar-week-heading"><button onClick={() => openDay(date)}><span>{WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]}</span><strong>{date.slice(-2)}</strong></button><button aria-label={`Add task on ${date}`} onClick={() => openDay(date)}><Plus size={15}/></button></div>
             <div className="calendar-week-items">{(byDay.get(date) ?? []).map(item => entry(item))}{!(byDay.get(date)?.length) && <p className="calendar-week-empty">Drop a task or add one</p>}</div>
           </section>)}
         </div></div>}
@@ -104,25 +115,27 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
           <div className="calendar-weekdays">{WEEKDAYS.map(day => <span key={day}>{day}</span>)}</div>
           <div className="calendar-month-grid">{monthDates(anchor).map(date => {
             const tasksOnDate = byDay.get(date) ?? [];
+            const plannedOnDate = plannedByDay.filter(e=>e.date===date);
             return <div key={date} className={`calendar-cell ${date.slice(0, 7) !== anchor.slice(0, 7) ? 'outside' : ''} ${date === today ? 'is-today' : ''}`} data-testid={`calendar-date-${date}`} {...dropProps(date)}>
               <div className="calendar-cell-head"><button className="calendar-day-number" onClick={() => openDay(date)} title={`View ${formatDate(date)}`}>{Number(date.slice(-2))}</button><button className="calendar-cell-add" aria-label={`Add task on ${date}`} title="Add on this date" onClick={() => addAt(date)}><Plus size={15}/></button></div>
-              <div className="calendar-cell-entries">{tasksOnDate.slice(0, 3).map(item => entry(item, true))}{tasksOnDate.length > 3 && <button className="calendar-more" onClick={() => openDay(date)}>+{tasksOnDate.length - 3} more</button>}</div>
+              <div className="calendar-cell-entries">{plannedOnDate.slice(0,2).map(item=><button key={item.id} type="button" className="calendar-chip plan-calendar-chip" onClick={()=>openDay(date)} title="Open day planner">{item.title}</button>)}{tasksOnDate.slice(0, Math.max(0,3-plannedOnDate.length)).map(item => entry(item, true))}{tasksOnDate.length > 3 && <button className="calendar-more" onClick={() => openDay(date)}>+{tasksOnDate.length - 3} more</button>}</div>
             </div>;
           })}</div>
         </div>}
         {scale === 'year' && <div className="calendar-year" aria-label="Yearly calendar">{Array.from({ length: 12 }, (_, i) => i + 1).map(month => {
           const monthAnchor = `${anchor.slice(0, 4)}-${String(month).padStart(2, '0')}-01`;
           const days = monthDates(monthAnchor);
-          const count = occurrences.filter(item => item.date.slice(0, 7) === monthAnchor.slice(0, 7)).length;
+          const count = occurrences.filter(item => item.date.slice(0, 7) === monthAnchor.slice(0, 7)).length + plannedByDay.filter(e=>e.date.startsWith(monthAnchor.slice(0,7))).length;
           return <button type="button" className="panel calendar-year-month" key={month} onClick={() => { setAnchor(monthAnchor); setScale('month'); }} aria-label={`Open ${dateTitle(monthAnchor, 'month')}, ${count} tasks`}>
             <div className="year-month-heading"><strong>{dateTitle(monthAnchor, 'month').split(' ')[0]}</strong><span>{count} tasks</span></div>
             <div className="year-mini-grid">{WEEKDAYS.map(day => <small key={day}>{day[0]}</small>)}{days.map(date => {
               const occurrences = byDay.get(date) ?? [];
+              const plannedCount=plannedByDay.filter(e=>e.date===date).length;
               const labels = occurrences.map(item => visibleStatus(item.task, item.completed));
               const important = (['postponed', 'progressing', 'started', 'not-started', 'finished'] as TaskStatus[]).find(status => labels.includes(status));
               const summary = [...new Set(labels)].map(status => STATUS_LABEL[status]).join(', ');
               return <span key={date} title={occurrences.length ? `${date}: ${occurrences.length} task(s) — ${summary}` : date}
-                className={`${date.slice(0, 7) === monthAnchor.slice(0, 7) ? '' : 'outside'} ${date === today ? 'today' : ''} ${occurrences.length ? 'scheduled' : ''} ${important ? `status-${important}` : ''}`}>
+                className={`${date.slice(0, 7) === monthAnchor.slice(0, 7) ? '' : 'outside'} ${date === today ? 'today' : ''} ${occurrences.length || plannedCount ? 'scheduled' : ''} ${important ? `status-${important}` : ''}`}>
                 {date.slice(0, 7) === monthAnchor.slice(0, 7) ? Number(date.slice(-2)) : ''}
               </span>;
             })}</div>

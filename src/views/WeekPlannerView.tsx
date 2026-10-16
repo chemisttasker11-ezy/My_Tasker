@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace';
 import { ArrowRight, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, ClipboardList, Flag, Plus, Target, TrendingUp } from 'lucide-react';
 import { type BoardState, type Lane, type Task, type View, type WeekReview } from '../model';
 import { addDays, calendarOccurrences, dateTitle, mondayOf } from '../lib/calendar';
@@ -11,6 +12,8 @@ type ReviewNotes = Pick<WeekReview, 'wins' | 'blockers' | 'adjustment'>;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 interface Props {
+  planActions: PlanningActions;
+  onCapacity: (weekStart: string, hours: number, intention: string) => void;
   board: BoardState;
   today: string;
   navigate: (view: View) => void;
@@ -21,12 +24,15 @@ interface Props {
 }
 
 /** Visual planning composes the shared calendar projector and pure score model. */
-export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onFocus, onReview }: Props) {
+export function WeekPlannerView({ board, planActions, onCapacity, today, navigate, onEdit, onInclude, onFocus, onReview }: Props) {
   const [anchor, setAnchor] = useState(today);
+  const [capacity, setCapacity] = useState('');
+  const [intention, setIntention] = useState('');
   const weekStart = mondayOf(anchor);
   const weekEnd = addDays(weekStart, 6);
   const isPastWeek = weekEnd < today;
   const plan = board.weekPlans?.[weekStart];
+  useEffect(() => { setCapacity(String(board.weekPlans[weekStart]?.capacityHours ?? '')); setIntention(board.weekPlans[weekStart]?.intention ?? ''); }, [weekStart]);
   const summary = useMemo(() => scoreWeek(plan, board, weekStart, today), [plan, board, weekStart, today]);
   const shownPercent = isPastWeek && plan?.review?.savedAt ? plan.review.scoreSnapshot : summary.percent;
   const [notes, setNotes] = useState<ReviewNotes>({ wins: '', blockers: '', adjustment: '' });
@@ -84,7 +90,18 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
       </div>
     </section>
 
-    <section className="week-days-section" aria-label="Plan by day">
+    <section className="week-intention panel" aria-label="Weekly intention and capacity">
+      <div><h2>Make this week realistic</h2><p>Choose your one meaningful outcome and protect time for rest. Don't overfill seven days.</p></div>
+      <form onSubmit={event=>{ event.preventDefault();onCapacity(weekStart,Number(capacity||0),intention); }}>
+        <label>One meaningful win <input maxLength={400} value={intention} onChange={e=>setIntention(e.target.value)} placeholder="What would make this a successful week?"/></label>
+        <label>Capacity (hours) <input type="number" min={0} max={168} step="0.5" value={capacity} onChange={e=>setCapacity(e.target.value)} placeholder="e.g. 20"/></label>
+        <button type="submit" className="button button-primary">Save weekly intention</button>
+      </form>
+      {Number(capacity)>0&&<p className="week-capacity-summary">Estimated planned time: {(board.plannedEntries.filter(e=>e.date>=weekStart&&e.date<=weekEnd).reduce((sum,e)=>sum+e.estimateMinutes,0)/60).toFixed(1)} / {capacity} hours</p>}
+    </section>
+    <PlanWorkspace board={board} dates={days} actions={planActions} title="Build your seven-day plan"/>
+    <section className="week-days-section week-legacy-projection" aria-label="Existing recurring appointments">
+      <details><summary>View recurring tasks and previous due-date schedule</summary>
       <div className="week-section-title"><h2>Seven days, one clear plan</h2><p>Choose up to three priorities for each day. Open any task to edit it, or use Calendar to move its date.</p></div>
       <div className="week-days-grid">
         {days.map((date, index) => {
@@ -124,6 +141,7 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
       </div>
     </section>
 
+    </details></section>
     <div className="week-bottom-grid">
       <section className="panel week-commitments" aria-label="Committed tasks">
         <header className="week-panel-head"><div><h2>My commitments</h2><p>{summary.planned} selected · Postponed work still counts in this week's score.</p></div><Flag size={19}/></header>

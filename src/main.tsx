@@ -11,6 +11,7 @@ import './styles.css';
 import './styles/foundations.css';
 import './styles/weekly.css';
 import './styles/energy.css';
+import './styles/planning.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
