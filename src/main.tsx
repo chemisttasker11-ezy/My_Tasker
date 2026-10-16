@@ -17,6 +17,7 @@ import './styles/energetic-pro.css';
 import './styles/auth-admin.css';
 import './styles/draft-recovery.css';
 import './styles/sync-recovery.css';
+import './styles/calendar-compact.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
