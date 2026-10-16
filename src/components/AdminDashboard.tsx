@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardList, Eye, FileClock, LockKeyhole, LogOut, RefreshCw, Search, Settings2, ShieldCheck, Users, UserX, UserRoundCheck } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, ClipboardList, FileClock, LockKeyhole, LogOut, RefreshCw, Search, Settings2, ShieldCheck, Users, UserRoundCheck } from 'lucide-react';
 import * as admin from '../lib/adminApi';
 
 type Tab='overview'|'users'|'audit'|'security';
