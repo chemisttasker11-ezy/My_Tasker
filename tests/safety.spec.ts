@@ -86,3 +86,36 @@ test('a failed lazy tracker load offers saved data and reload', async ({ page })
   await expect(page.getByRole('button', { name: 'Download my data', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reload', exact: true })).toBeVisible();
 });
+
+
+for (const choice of ['Use mine', 'Keep theirs'] as const) {
+  test(`an editor opened before a cross-tab task edit preserves its draft and offers ${choice}`, async ({ page, context }) => {
+    const board = initialState(); board.onboardingStep = undefined;
+    board.tasks = [createTask({ title: 'Original task' })];
+    await page.evaluate(({ key, board }) => localStorage.setItem(key, JSON.stringify(board)), { key: STORAGE_KEY, board });
+    await page.reload();
+    await page.getByRole('button', { name: 'My task board', exact: true }).click();
+    await page.getByRole('button', { name: 'Original task', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Task name', exact: true }).fill('My preserved draft');
+
+    const otherTab = await context.newPage();
+    await otherTab.goto('/');
+    await otherTab.getByRole('button', { name: 'My task board', exact: true }).click();
+    await otherTab.getByRole('button', { name: 'Original task', exact: true }).click();
+    await otherTab.getByRole('textbox', { name: 'Task name', exact: true }).fill('Their task edit');
+    await otherTab.getByRole('button', { name: 'Save changes', exact: true }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'Updated board loaded from another tab.' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+    const conflict = page.getByRole('dialog', { name: 'This task changed in another tab', exact: true });
+    await expect(conflict).toBeVisible();
+    await expect(conflict).toContainText('My preserved draft');
+    expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).tasks[0].title, STORAGE_KEY)).toBe('Their task edit');
+    await page.keyboard.press('Escape');
+    await expect(conflict).toBeVisible();
+    await conflict.getByRole('button', { name: choice, exact: true }).click();
+    await expect(conflict).toHaveCount(0);
+    await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).tasks[0].title, STORAGE_KEY)).toBe(choice === 'Use mine' ? 'My preserved draft' : 'Their task edit');
+    await otherTab.close();
+  });
+}

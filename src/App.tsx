@@ -1,9 +1,9 @@
 import { type Dispatch, type SetStateAction, lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, CalendarDays, CalendarRange, BarChart3, Check, CheckCircle2, ChevronRight, LayoutDashboard, ListTodo, Menu, Moon, Plus, Settings2, Sparkles, Sun, Target, X } from 'lucide-react';
-import { type BoardState, type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, periodKey, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, loadBoard, preserveRaw, writeBoard, rescheduleTask, saveTaskChanges, saveWeekReview, setTaskStatus, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
+import { type TaskEditSnapshot, taskEditConflicts, type BoardState, type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, periodKey, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, loadBoard, preserveRaw, writeBoard, rescheduleTask, saveTaskChanges, saveWeekReview, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
 import { activeItem, downloadable, LANE_LABEL, longToday } from './lib/display';
 import { RecoveryScreen, OnboardingCard } from './components/BoardSafety';
-import { TaskModal } from './components/TaskModal';
+import { TaskEditor } from './components/TaskEditor';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
 import { TodayView } from './views/TodayView';
@@ -14,7 +14,7 @@ import { SettingsView } from './views/SettingsView';
 import { ArchivedView } from './views/ArchivedView';
 import { CalendarView } from './views/CalendarView';
 import { visibleStatus } from './lib/progress';
-import { mondayOf } from './lib/calendar';
+import { mondayOf, setCalendarOccurrenceStatus } from './lib/calendar';
 import { scoreWeek } from './lib/scoring';
 import { WeekPlannerView } from './views/WeekPlannerView';
 import { LibraryView } from './views/LibraryView';
@@ -22,7 +22,7 @@ import { QuotesView } from './views/QuotesView';
 import type { TrackerLaunch } from './views/TrackerView';
 import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
-import { dailyQuote, quoteSettings } from './lib/quotes';
+import { dailyQuote, quoteSettings, relevantTasksForDate } from './lib/quotes';
 import { Library, Quote, Printer } from 'lucide-react';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
 
@@ -45,21 +45,26 @@ export default function App() {
   const recoveryRef = useRef(loaded.recovery);
   const queue = useRef(Promise.resolve());
   const externalRevision = useRef(0);
-  const setBoard: Dispatch<SetStateAction<BoardState>> = action => {
+  const setBoard: Dispatch<SetStateAction<BoardState>> = action => changeBoard(action);
+  function changeBoard(action: SetStateAction<BoardState>, callbacks?: { onApplied: () => void; onConflict: (current: BoardState) => void }) {
     const observedRevision = externalRevision.current;
     queue.current = queue.current.then(async () => {
       const apply = () => {
         if (recoveryRef.current) return;
-        if (observedRevision !== externalRevision.current) { setNotice('Another tab changed the board; this change was not applied.'); return; }
+        if (observedRevision !== externalRevision.current) {
+          if (callbacks) callbacks.onConflict(boardRef.current);
+          else setNotice('Another tab changed the board; this change was not applied.');
+          return;
+        }
         const current = boardRef.current;
         const next = typeof action === 'function' ? action(current) : action;
-        if (next === current) { setNotice('No change was saved. The selection may be unavailable or a board limit has been reached.'); return; }
+        if (next === current) { if (!callbacks) setNotice('No change was saved. The selection may be unavailable or a board limit has been reached.'); return; }
         try {
           const warnings: string[] = [];
           try { validateImported(next, warnings); } catch (err) { setNotice(err instanceof Error ? err.message : 'Invalid change'); return; }
           if (warnings.length) { setNotice(`Change not saved: ${warnings.join(' ')}`); return; }
           const saved = writeBoard(rawRef.current, next);
-          dirtyRef.current = false; rawRef.current = saved.raw; boardRef.current = saved.board; updateBoard(saved.board); setSaveError(false);
+          dirtyRef.current = false; rawRef.current = saved.raw; boardRef.current = saved.board; updateBoard(saved.board); setSaveError(false); callbacks?.onApplied();
         } catch (error) {
           if (error instanceof Error && error.message === 'conflict') {
             const incoming = loadBoard();
@@ -69,9 +74,10 @@ export default function App() {
             externalRevision.current++;
             if (incoming.recovery) { recoveryRef.current = incoming.recovery; setRecovery(incoming.recovery); }
             else { rawRef.current = incoming.raw; boardRef.current = incoming.board; updateBoard(incoming.board); }
-            setNotice('Another tab changed this board. The newer board was loaded; your attempted change was not applied.');
+            if (callbacks && !incoming.recovery) callbacks.onConflict(incoming.board);
+            else setNotice('Another tab changed this board. The newer board was loaded; your attempted change was not applied.');
           } else {
-            dirtyRef.current = true; boardRef.current = next; updateBoard(next); setSaveError(true);
+            dirtyRef.current = true; boardRef.current = next; updateBoard(next); setSaveError(true); callbacks?.onApplied();
           }
         }
       };
@@ -81,7 +87,8 @@ export default function App() {
   };
   const [view, setView] = useState<View>('overview');
   const [selectedLane, setSelectedLane] = useState<Lane>('urgent');
-  const [editor, setEditor] = useState<{ task: Task | null; lane: Lane; date?: string; isCopy?: boolean } | null>(null);
+  const [editor, setEditor] = useState<{ task: Task | null; lane: Lane; date?: string; isCopy?: boolean; snapshot: TaskEditSnapshot } | null>(null);
+  const [editorConflict, setEditorConflict] = useState<{ draft: Task; snapshot: TaskEditSnapshot } | null>(null);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'All'>('All');
@@ -136,18 +143,39 @@ export default function App() {
 
   function alertNotice(message: string) { setNotice(message); }
   function navigate(next: View) { setView(next); setMobileNav(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-  function showEditor(task: Task | null, lane: Lane = 'urgent', date = '') { setEditor({ task, lane, date }); }
-  function duplicateTask(task: Task) { setEditor({ task: cloneTask(task), lane: task.lane, isCopy: true }); }
-  function saveTask(task: Task) {
-    const warnings: string[] = [];
-    try { validateImported({ ...board, tasks: board.tasks.some(t => t.id === task.id) ? board.tasks.map(t => t.id === task.id ? task : t) : [...board.tasks, task] }, warnings); }
-    catch (err) { alertNotice(err instanceof Error ? err.message : 'Task could not be saved'); return; }
-    if (warnings.length) { alertNotice('Task could not be saved: ' + warnings.join(' ')); return; }
-    setBoard(s => saveTaskChanges(s, task));
-    setEditor(null); alertNotice('Task saved');
+  function closeEditor() { setEditor(null); setEditorConflict(null); }
+  function showEditor(task: Task | null, lane: Lane = 'urgent', date = '') {
+    setEditorConflict(null);
+    setEditor({ task, lane, date, snapshot: { task, revision: boardRef.current.revision ?? 0 } });
   }
-  function changeStatus(id: string, status: TaskStatus, postponedTo?: string) {
-    setBoard(s => setTaskStatus(s, id, status, postponedTo));
+  function duplicateTask(task: Task) {
+    setEditorConflict(null);
+    setEditor({ task: cloneTask(task), lane: task.lane, isCopy: true, snapshot: { task: null, revision: boardRef.current.revision ?? 0 } });
+  }
+  function saveTask(task: Task, snapshot = editor?.snapshot) {
+    if (!snapshot) return;
+    const conflict = (current: BoardState) => {
+      if (taskEditConflicts(snapshot, current, task.id)) {
+        setEditorConflict({ draft: task, snapshot: { task: current.tasks.find(t => t.id === task.id) ?? null, revision: current.revision ?? 0 } });
+        alertNotice('This task changed in another tab');
+        return true;
+      }
+      return false;
+    };
+    changeBoard(current => {
+      if (conflict(current)) return current;
+      const warnings: string[] = [];
+      try { validateImported({ ...current, tasks: current.tasks.some(t => t.id === task.id) ? current.tasks.map(t => t.id === task.id ? task : t) : [...current.tasks, task] }, warnings); }
+      catch (err) { alertNotice(err instanceof Error ? err.message : 'Task could not be saved'); return current; }
+      if (warnings.length) { alertNotice('Task could not be saved: ' + warnings.join(' ')); return current; }
+      return saveTaskChanges(current, task);
+    }, {
+      onApplied: () => { closeEditor(); alertNotice('Task saved'); },
+      onConflict: current => { if (!conflict(current)) alertNotice('Another tab changed the board. Your draft is kept; save again to apply it.'); }
+    });
+  }
+  function changeStatus(id: string, status: TaskStatus, postponedTo?: string, occurrenceDate?: string) {
+    setBoard(s => setCalendarOccurrenceStatus(s, id, status, postponedTo, occurrenceDate));
     alertNotice(status === 'postponed' ? 'Task postponed to its new date' : `Status updated`);
   }
   function includeInWeek(weekStart: string, id: string, include: boolean) {
@@ -222,7 +250,7 @@ export default function App() {
     setBoard(initialState()); navigate('overview'); alertNotice('Empty board created');
   }
   const selectedNav = NAV.find(n => n.id === view);
-  const reminder = dailyQuote(board.quotes, day, todayTasks);
+  const reminder = dailyQuote(board.quotes, day, relevantTasksForDate(board, day));
   function addTemplates(ids: string[]) {
     setBoard(current => addLifeTemplates(current, ids));
     alertNotice('Life tasks added with notes and checklists. Set dates whenever you are ready.');
@@ -275,7 +303,7 @@ export default function App() {
         {(view === 'overview' || view === 'today') && <section className="direction-banner" aria-label="Daily inspiration"><div><span>MY DIRECTION</span><p>{quoteSettings(board.quotes).direction || 'Choose a reminder of what matters to you.'}</p></div><div><span>TODAY’S REMINDER</span><p>{reminder.text}</p></div><button className="icon-button" aria-label="Edit direction and quotes" onClick={() => navigate('quotes')}><Quote size={18}/></button></section>}
         {board.onboardingStep && <OnboardingCard step={board.onboardingStep} onStep={step => setBoard(s => ({ ...s, onboardingStep: step }))} onLibrary={() => { setBoard(s => ({ ...s, onboardingStep: undefined })); navigate('library'); }}/> }
         {view === 'library' && <LibraryView tasks={board.tasks} onAdd={addTemplates}/>}
-        {view === 'quotes' && <QuotesView value={board.quotes} today={day} tasks={todayTasks} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
+        {view === 'quotes' && <QuotesView board={board} value={board.quotes} today={day} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
         {view === 'tracker' && <Suspense fallback={<p role="status">Loading your tracker…</p>}><TrackerView board={board} launch={trackerLaunch}/></Suspense>}
         {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={showEditor} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore} scoreEnabled={board.weeklyScoreEnabled ?? false}/>}
         {view === 'board' && <BoardView visible={visible} search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} selectedLane={selectedLane} setSelectedLane={setSelectedLane} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask} moveTask={moveTask} archiveTask={archiveTask} duplicateTask={duplicateTask} changeStatus={changeStatus} toggleSubtask={toggleSubtask}/>}
@@ -290,7 +318,7 @@ export default function App() {
         <footer className="site-footer"><span>Built for your real life <span>✳</span></span><span>Local-first · Australia/Brisbane · Version 1.0</span></footer>
       </main>
     </div>
-    {editor && <TaskModal key={`${editor.task?.id ?? `new-${editor.lane}`}-${editor.date ?? ''}`} task={editor.task} defaultLane={editor.lane} defaultDate={editor.date ?? ''} effectiveStatus={editor.task ? visibleStatus(editor.task, isCompleted(editor.task, board.completions, day)) : undefined} isCopy={editor.isCopy} onDismiss={() => setEditor(null)} onSave={saveTask}/>}
+    {editor && <TaskEditor key={`${editor.task?.id ?? `new-${editor.lane}`}-${editor.date ?? ''}`} task={editor.task} defaultLane={editor.lane} defaultDate={editor.date ?? ''} effectiveStatus={editor.task ? visibleStatus(editor.task, isCompleted(editor.task, board.completions, day)) : undefined} isCopy={editor.isCopy} onDismiss={closeEditor} onSave={saveTask} conflict={editorConflict?.draft ?? null} onUseMine={() => { if (editorConflict) saveTask(editorConflict.draft, editorConflict.snapshot); }} onKeepTheirs={closeEditor}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification"><X size={15}/></button></div>}
   </div></AreasContext.Provider>;
 }

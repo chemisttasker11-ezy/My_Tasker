@@ -263,6 +263,17 @@ export function setTaskStatus(state: BoardState, id: string, status: TaskStatus,
   };
 }
 
+export interface TaskEditSnapshot { revision: number; task: Task | null }
+
+/** A newer board alone is harmless; only changes to the edited task require a choice.
+ * Compare content even at the same revision to support writes from legacy tabs.
+ */
+export function taskEditConflicts(snapshot: TaskEditSnapshot, current: BoardState, taskId: string): boolean {
+  const task = current.tasks.find(t => t.id === taskId) ?? null;
+  if (snapshot.revision === (current.revision ?? 0) && snapshot.task === task) return false;
+  return JSON.stringify(snapshot.task) !== JSON.stringify(task);
+}
+
 /** Save modal changes, without creating fake completions or losing existing history. */
 export function saveTaskChanges(state: BoardState, draft: Task, now = new Date()): BoardState {
   if (draft.subtasks.length > LIMITS.checklist || draft.title.length > 250 || draft.description.length > 10000) return state;

@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { createTask, initialState, saveWeekReview, setTaskStatus, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from '../model';
+import { CATEGORIES, createTask, initialState, saveWeekReview, setTaskStatus, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from '../model';
 import { scoreWeek, STATUS_POINTS } from './scoring';
+
+function legacyState() {
+  return { ...initialState(), areas: CATEGORIES.map(area => ({ ...area })), tasks: [
+    createTask({ id: 'notebook-1', title: 'Tax', category: 'Finance', priority: 'high', origin: 'notebook' }),
+    createTask({ id: 'notebook-2', title: 'Take / book appointments', category: 'Personal', priority: 'high', origin: 'notebook' }),
+    createTask({ id: 'notebook-3', title: 'Clear reports backlog', category: 'Pharmacy', priority: 'high', origin: 'notebook' }),
+    createTask({ id: 'notebook-4', title: 'Claude setup', category: 'ChemistTasker', origin: 'notebook' })
+  ] };
+}
 
 const today = new Date('2026-10-16T02:00:00Z');
 const week = '2026-10-12';
@@ -46,7 +55,7 @@ describe('weekly score and deliberate focus', () => {
     expect(state.weekPlans[week].review?.wins).toBe('Shipped');
   });
   it('limits each day to three distinct priorities and preserves legacy backups', () => {
-    let state = initialState();
+    let state = legacyState();
     for (const task of state.tasks.slice(0, 4)) state = toggleDailyFocus(state, '2026-10-16', task.id);
     expect(state.dailyFocus['2026-10-16']).toHaveLength(3);
     state = toggleDailyFocus(state, '2026-10-16', state.tasks[1].id);
@@ -57,7 +66,7 @@ describe('weekly score and deliberate focus', () => {
     expect(validateImported(old).dailyFocus).toEqual({});
   });
   it('rejects imported plans with duplicated IDs or invalid scores', () => {
-    let state = initialState();
+    let state = legacyState();
     const task = state.tasks[0];
     state = setWeekCommitment(state, week, task, true);
     const tampered = JSON.parse(JSON.stringify(state));

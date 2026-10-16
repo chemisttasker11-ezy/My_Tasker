@@ -18,6 +18,53 @@ import {
   setTrackerFontsForTesting
 } from './trackerPdf';
 
+// Original v1 export shape: no areas, weekly planning, quotes or newer task fields.
+function legacyBackup() {
+  const rows: [string, string, 'urgent' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'goals', 'none' | 'daily' | 'weekly' | 'monthly' | 'quarterly' | 'yearly', 'high' | 'medium'][] = [
+    ['Tax', 'Finance', 'urgent', 'none', 'high'],
+    ['Take / book appointments', 'Personal', 'urgent', 'none', 'high'],
+    ['Clear reports backlog', 'Pharmacy', 'urgent', 'none', 'high'],
+    ['Claude setup', 'ChemistTasker', 'urgent', 'none', 'medium'],
+    ['Complete any reports', 'Pharmacy', 'daily', 'daily', 'medium'],
+    ['Family time', 'Family', 'daily', 'daily', 'high'],
+    ['Pharmacy shifts or visits', 'Pharmacy', 'daily', 'daily', 'medium'],
+    ['Check emails and reply', 'Personal', 'daily', 'daily', 'medium'],
+    ['Review my tasks', 'Personal', 'daily', 'daily', 'medium'],
+    ['Training / CPD', 'Pharmacy', 'daily', 'daily', 'medium'],
+    ['ChemistTasker progress', 'ChemistTasker', 'daily', 'daily', 'high'],
+    ['Invoices for shifts', 'Finance', 'weekly', 'weekly', 'medium'],
+    ['Make sure reports are sent', 'Pharmacy', 'weekly', 'weekly', 'medium'],
+    ['Check new referrals', 'Pharmacy', 'weekly', 'weekly', 'medium'],
+    ['One day outing with family', 'Family', 'weekly', 'weekly', 'high'],
+    ['Build a habit with family', 'Family', 'weekly', 'weekly', 'medium'],
+    ['Invoices', 'Finance', 'monthly', 'monthly', 'medium'],
+    ['Claims', 'Finance', 'monthly', 'monthly', 'medium'],
+    ['Review and pay bills', 'Finance', 'monthly', 'monthly', 'medium'],
+    ['BAS', 'Finance', 'quarterly', 'quarterly', 'medium'],
+    ['Annual tax return', 'Finance', 'quarterly', 'yearly', 'medium'],
+    ['Baladi', 'Personal', 'goals', 'none', 'medium'],
+    ['Sport', 'Personal', 'goals', 'none', 'medium'],
+    ['Grow ChemistTasker', 'ChemistTasker', 'goals', 'none', 'medium'],
+    ['Family habits', 'Family', 'goals', 'none', 'medium'],
+    ['Lose weight', 'Personal', 'goals', 'none', 'medium']
+  ];
+  const descriptions: Record<number, string> = {
+    0: 'Review outstanding tax paperwork and identify the next step.',
+    2: 'Review outstanding HMR and RMMR reports.',
+    3: 'Finish the development assistant setup.',
+    19: 'Quarterly business activity statement.'
+  };
+  return {
+    version: 1, theme: 'light', completions: [],
+    tasks: rows.map(([title, category, lane, recurrence, priority], i) => ({
+      id: `notebook-${i + 1}`, title, category, lane, recurrence, priority, description: descriptions[i] ?? '',
+      dueDate: '', estimateMinutes: 0, subtasks: [], createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z', completedAt: '', archivedAt: '', origin: 'notebook'
+    }))
+  };
+}
+const legacyState = () => validateImported(legacyBackup());
+
 const options: TrackerOptions = { anchor: '2026-10-16', scale: 'day', area: 'All', includeUndated: true, includeChecklist: true, paper: 'a4' };
 
 beforeAll(() => {
@@ -31,7 +78,7 @@ beforeAll(() => {
 
 describe('life library and saved board compatibility', () => {
   it('adds a detailed starter set once, preserving all existing records and progress', () => {
-    const original = toggleCompletion(initialState(), 'notebook-1');
+    const original = toggleCompletion(legacyState(), 'notebook-1');
     const next = addLifeTemplates(original, STARTER_IDS);
     expect(next.tasks).toHaveLength(original.tasks.length + 12);
     expect(next.completions).toBe(original.completions);
@@ -54,15 +101,23 @@ describe('life library and saved board compatibility', () => {
     expect(duplicateTask(added[0]).templateId).toBeUndefined();
   });
   it('migrates original backups without areas or quotes', () => {
-    const old = { ...initialState(), areas: undefined, quotes: undefined };
-    const next = validateImported(old);
+    const old = legacyBackup();
+    old.tasks[0].completedAt = '2026-10-15T02:00:00.000Z';
+    const backup = { ...old, completions: [{ id: 'legacy-done', taskId: old.tasks[0].id, title: old.tasks[0].title,
+      category: old.tasks[0].category, completedAt: old.tasks[0].completedAt, periodKey: 'once' }] };
+    expect(backup).not.toHaveProperty('areas');
+    expect(backup.tasks[0]).not.toHaveProperty('status');
+    const next = validateImported(JSON.parse(JSON.stringify(backup)));
+    expect(next.tasks).toMatchObject(backup.tasks);
+    expect(next.completions).toMatchObject(backup.completions);
+    expect(next.areas.map(a => a.id)).toEqual(['ChemistTasker', 'Pharmacy', 'Family', 'Finance', 'Personal']);
     expect(next.areas).toHaveLength(5); expect(next.quotes?.direction).toBeTruthy(); expect(next.tasks).toHaveLength(26);
   });
 });
 
 describe('editable life areas', () => {
   it('renames and removes areas without losing tasks, history or plans', () => {
-    const board = toggleCompletion(initialState(), 'notebook-1');
+    const board = toggleCompletion(legacyState(), 'notebook-1');
     const renamed = changeArea(board, 'Finance', 'Money');
     expect(renamed.tasks.find(t => t.id === 'notebook-1')?.category).toBe('Money');
     expect(renamed.completions[0].category).toBe('Money');
@@ -71,10 +126,10 @@ describe('editable life areas', () => {
     expect(validateImported(removed).areas).toHaveLength(4);
   });
   it('rejects duplicate names and invalid destinations and uses surviving areas for templates', () => {
-    expect(() => changeArea(initialState(), null, ' family ')).toThrow();
-    expect(() => changeArea(initialState(), null, 'All')).toThrow();
-    expect(() => removeArea(initialState(), 'Family', 'Family')).toThrow();
-    const board = removeArea(initialState(), 'Personal', 'Family');
+    expect(() => changeArea(legacyState(), null, ' family ')).toThrow();
+    expect(() => changeArea(legacyState(), null, 'All')).toThrow();
+    expect(() => removeArea(legacyState(), 'Family', 'Family')).toThrow();
+    const board = removeArea(legacyState(), 'Personal', 'Family');
     expect(addLifeTemplates(board, ['morning']).tasks.at(-1)?.category).toBe('ChemistTasker');
   });
 });
@@ -103,7 +158,7 @@ describe('quotes and tracker content', () => {
     expect(trackerData(board, { ...options, includeUndated: false }).undated).toHaveLength(0);
   });
   it('shows undated recurring completion for the selected day without carrying it forward', () => {
-    const board = toggleCompletion(initialState(), 'notebook-6', new Date('2026-10-16T02:00:00Z'));
+    const board = toggleCompletion(legacyState(), 'notebook-6', new Date('2026-10-16T02:00:00Z'));
     expect(trackerData(board, options).undated.find(t => t.task.id === 'notebook-6')?.completed).toBe(true);
     expect(trackerData(board, { ...options, anchor: '2026-10-17' }).undated.find(t => t.task.id === 'notebook-6')?.completed).toBe(false);
   });

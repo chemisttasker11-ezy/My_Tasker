@@ -287,3 +287,39 @@ describe('board safety and additive migration', () => {
     expect(nextDueDate('2000-01-31', 'monthly', '2026-10-16')).toBe('2026-10-31');
   });
 });
+
+
+describe('task editor conflict rule', () => {
+  it('detects changes to an edited task after another tab advances the revision', async () => {
+    const { taskEditConflicts } = await import('./model');
+    const board = emptyState(); const task = createTask({ title: 'Original' }); board.tasks = [task]; board.revision = 5;
+    const snapshot = { revision: 5, task };
+    const theirs = { ...task, title: 'Their title' };
+    expect(taskEditConflicts(snapshot, { ...board, revision: 6, tasks: [theirs] }, task.id)).toBe(true);
+    expect(taskEditConflicts(snapshot, { ...board, revision: 6, tasks: [{ ...task, subtasks: [{ id: 'step', title: 'New step', done: true }] }] }, task.id)).toBe(true);
+    expect(taskEditConflicts(snapshot, { ...board, revision: 6, tasks: [] }, task.id)).toBe(true);
+    expect(task.title).toBe('Original');
+  });
+  it('allows an unchanged task when unrelated board changes advance the revision', async () => {
+    const { taskEditConflicts } = await import('./model');
+    const task = createTask({ title: 'Original' }); const board = { ...emptyState(), revision: 7, tasks: [task] };
+    const snapshot = { revision: 7, task };
+    expect(taskEditConflicts(snapshot, board, task.id)).toBe(false);
+    expect(taskEditConflicts(snapshot, { ...board, revision: 8, theme: 'dark', tasks: [{ ...task }, createTask({ title: 'Other task' })] }, task.id)).toBe(false);
+  });
+  it('supports legacy tabs and checks for another change after Use mine was offered', async () => {
+    const { taskEditConflicts } = await import('./model');
+    const task = createTask({ title: 'Original' }); const theirs = { ...task, title: 'Theirs' };
+    const board = { ...emptyState(), revision: 0, tasks: [theirs] };
+    expect(taskEditConflicts({ revision: 0, task }, board, task.id)).toBe(true);
+    const acknowledged = { revision: 0, task: theirs };
+    expect(taskEditConflicts(acknowledged, board, task.id)).toBe(false);
+    expect(taskEditConflicts(acknowledged, { ...board, revision: 1, tasks: [{ ...theirs, description: 'Changed again' }] }, task.id)).toBe(true);
+  });
+  it('does not conflict for a new task or a duplicate unless its ID already exists', async () => {
+    const { taskEditConflicts } = await import('./model');
+    const task = createTask({ title: 'New' }); const snapshot = { revision: 0, task: null };
+    expect(taskEditConflicts(snapshot, { ...emptyState(), revision: 2 }, task.id)).toBe(false);
+    expect(taskEditConflicts(snapshot, { ...emptyState(), revision: 2, tasks: [task] }, task.id)).toBe(true);
+  });
+});
