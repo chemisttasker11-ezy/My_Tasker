@@ -1,5 +1,6 @@
 import { useAreas } from '../lib/areas';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useModalFocus } from './planning/useModalFocus';
 import { Check, ClipboardCheck, Plus, X } from 'lucide-react';
 import { LANES, createTask, generateId, type Category, type Lane, type Priority, type Recurrence, type Subtask, type Task, type TaskStatus, brisbaneToday } from '../model';
 import { RECUR_LABEL } from '../lib/display';
@@ -23,11 +24,10 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
   const [status, setStatus] = useState<TaskStatus>(effectiveStatus ?? task?.status ?? 'not-started');
   const [formError, setFormError] = useState('');
   const titleRef = useRef<HTMLInputElement>(null);
+  const modalRef = useModalFocus(onDismiss);
   useEffect(() => {
     titleRef.current?.focus();
-    const listener = (e: KeyboardEvent) => { if (e.key === 'Escape') onDismiss(); };
-    document.addEventListener('keydown', listener);
-    return () => document.removeEventListener('keydown', listener);
+
   }, [onDismiss]);
   function addSubtask() {
     if (!newSubtask.trim()) return;
@@ -44,7 +44,7 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
     onSave(createTask({ ...(task ?? {}), id: task?.id, title, description, lane, category, priority, dueDate: date, scheduledTime, scheduleAnchor: task && date === task.dueDate ? (task.scheduleAnchor || date) : date, recurrence,
       estimateMinutes: Math.max(0, Number(estimate) || 0), subtasks, status, origin: isCopy ? 'personal' : task?.origin ?? 'personal' }));
   }
-  return <div className="modal-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onDismiss(); }}>
+  return <div ref={modalRef} className="modal-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onDismiss(); }}>
     <section className="task-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="modal-head"><div><span className="eyebrow">MAKE IT HAPPEN</span><h2 id="modal-title">{isCopy ? 'Duplicate task' : task ? 'Edit task' : 'Create a task'}</h2></div><button aria-label="Close editor" type="button" className="icon-button" onClick={onDismiss}><X size={20}/></button></div>
       <form onSubmit={submit}>
