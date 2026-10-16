@@ -15,7 +15,30 @@ async function fonts() {
   })).catch(error => { fontPromise = undefined; throw error; });
   return fontPromise;
 }
-export interface TrackerDocument { svg: string; pdf: Blob; smallestFont: number; taskCount: number }
+export interface TrackerDocument { svg: string; pdf: Blob; smallestFont: number; taskCount: number; rasterizedLines: number }
+
+/** The bundled PDF font uses a Latin subset. Browser-rendered lines preserve unsupported glyphs. */
+const requiresFallback = (value: string) => /[^\x20-\x7e\u00a0-\u00ff\u2010-\u2027\u20ac]/u.test(value);
+
+/** Wrap fallback strings with browser font metrics rather than the Latin PDF subset's metrics. */
+function wrapUnicode(value: string, width: number, size: number, strong: boolean): string[] {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return [value];
+  ctx.font = `${strong ? '700' : '400'} ${size}px "Nunito Sans", "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Color Emoji", sans-serif`;
+  const result: string[] = [];
+  for (const paragraph of value.split(/\r?\n/u)) {
+    let line = '';
+    for (const letter of Array.from(paragraph)) {
+      if (line && ctx.measureText(line + letter).width > Math.max(1,width)) {
+        result.push(line.trimEnd()); line = letter.trimStart();
+      } else line += letter;
+    }
+    result.push(line || ' ');
+  }
+  return result;
+}
+
 
 /** One set of layout coordinates drives both the SVG preview and the vector PDF. */
 export async function buildTrackerDocument(data: TrackerData, options: TrackerOptions, direction: string, quote: string): Promise<TrackerDocument> {
@@ -28,6 +51,7 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
   pdf.setProperties({ title: `My Tasker · ${options.scale} tracker · ${data.title}`, creator: 'My Tasker', subject: 'One-page personal task tracker' });
   const width = pdf.internal.pageSize.getWidth(), height = pdf.internal.pageSize.getHeight();
   const margin = 22, inner = width - margin * 2, gap = 7;
+  let rasterizedLines = 0;
   const svg: string[] = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><style>@font-face{font-family:TrackerSans;src:url(data:font/ttf;base64,${regular}) format('truetype');font-weight:400}@font-face{font-family:TrackerSans;src:url(data:font/ttf;base64,${bold}) format('truetype');font-weight:700}</style></defs>`];
   function rect(x: number, y: number, w: number, h: number, fill: string, border?: string) {
     pdf.setFillColor(fill); if (border) { pdf.setDrawColor(border); pdf.setLineWidth(.5); }
@@ -35,10 +59,34 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
     svg.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"${border ? ` stroke="${border}" stroke-width="0.5"` : ''}/>`);
   }
   function text(value: string, x: number, y: number, size: number, color = INK, strong = false) {
+    if (requiresFallback(value)) {
+      // Use the same rendered PNG in the SVG preview and the PDF for Unicode/emoji.
+      // Browser font fallback covers scripts absent from the deliberately small PDF font.
+      const scale = 3;
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Cannot render international text without a canvas context.');
+      ctx.font = `${strong ? '700' : '400'} ${size}px "Nunito Sans", "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Color Emoji", sans-serif`;
+      const logicalW = Math.max(1, ctx.measureText(value).width + 5);
+      const logicalH = size * 1.65;
+      canvas.width = Math.ceil(logicalW * scale);
+      canvas.height = Math.ceil(logicalH * scale);
+      ctx.scale(scale, scale);
+      ctx.font = `${strong ? '700' : '400'} ${size}px "Nunito Sans", "Noto Sans Arabic", "Noto Sans CJK SC", "Noto Color Emoji", sans-serif`;
+      ctx.fillStyle = color;
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(value, 1.5, size * 1.23);
+      const imageData = canvas.toDataURL('image/png');
+      pdf.addImage(imageData,'PNG', x, y - size * 1.23, logicalW, logicalH);
+      svg.push(`<image x="${x}" y="${y-size*1.23}" width="${logicalW}" height="${logicalH}" href="${imageData}"><title>${escape(value)}</title></image>`);
+      rasterizedLines++;
+      return;
+    }
     pdf.setFont('TrackerSans', strong ? 'bold' : 'normal'); pdf.setFontSize(size); pdf.setTextColor(color); pdf.text(value, x, y);
     svg.push(`<text x="${x}" y="${y}" fill="${color}" font-family="TrackerSans" font-size="${size}" font-weight="${strong ? 700 : 400}">${escape(value)}</text>`);
   }
   function lines(value: string, w: number, size: number, strong = false): string[] {
+    if (requiresFallback(value)) return wrapUnicode(value, w, size, strong);
     pdf.setFont('TrackerSans', strong ? 'bold' : 'normal'); pdf.setFontSize(size);
     return pdf.splitTextToSize(value, w) as string[];
   }
@@ -62,8 +110,18 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
   text(scope, margin, y + 5, 8); y += 17;
   const bottom = height - 26;
   const available = bottom - y;
-  const hasDated = data.sections.some(s => s.items.length);
-  const undatedFraction = data.undated.length ? (!hasDated && options.scale === 'day' ? .72 : .32) : 0;
+  // Budget vertical space according to actual content rather than a fixed 32% undated slice.
+  // Sparse days with a large backlog no longer shrink all undated titles into a tiny strip.
+  const demand = (items: TrackerItem[]) => items.reduce((sum,item) =>
+    sum + 1 + (options.includeChecklist ? item.task.subtasks.length * .58 : 0) +
+    Math.max(0, Math.ceil(item.label.length / 54) - 1) * .5, 0);
+  const datedDemand = data.sections.reduce((sum,section) => sum + demand(section.items),0);
+  const undatedDemand = demand(data.undated);
+  const maxFraction = options.scale === 'day' ? .82 : options.scale === 'week' ? .58 : .46;
+  const undatedFraction = data.undated.length
+    ? Math.max(options.scale === 'day' ? .22 : .14,
+      Math.min(maxFraction, undatedDemand / Math.max(1,datedDemand + undatedDemand)))
+    : 0;
   const undatedHeight = available * undatedFraction;
   const gridHeight = available - undatedHeight - (undatedHeight ? gap : 0);
   const columns = options.scale === 'day' ? 1 : options.scale === 'week' ? 4 : options.scale === 'month' ? 7 : 4;
@@ -85,10 +143,11 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
     }));
     let size = options.scale === 'day' ? 10 : 8.5;
     let planned = plan(size);
-    while (Math.max(...planned.map(chunk => chunk.reduce((n, row) => n + row.height, 0))) > h - 28 && size > .65) { size *= .92; planned = plan(size); }
+    const contentBudget = Math.max(7, h - 28);
+    while (Math.max(...planned.map(chunk => chunk.reduce((n, row) => n + row.height, 0))) > contentBudget && size > .65) { size *= .92; planned = plan(size); }
     // For unusually large boards, grow the virtual content space then proportionally fit it.
     const contentHeight = Math.max(...planned.map(chunk => chunk.reduce((n, row) => n + row.height, 0)));
-    if (contentHeight > h - 28) { size *= (h - 28) / contentHeight; planned = plan(size); }
+    if (contentHeight > contentBudget) { size *= contentBudget / contentHeight; planned = plan(size); }
     smallestFont = Math.min(smallestFont, options.includeChecklist && items.some(i => i.task.subtasks.length) ? size * .88 : size);
     planned.forEach((chunk, col) => {
       const left = x + 6 + col * (cellWidth + 9); let baseline = top + 25 + size;
@@ -106,12 +165,12 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
       }
     });
   }
-  data.sections.forEach((section, i) => panel(section.title, section.items, margin + i % columns * (cellW + gap), y + Math.floor(i / columns) * (cellH + gap), cellW, cellH, options.scale === 'day' ? 3 : 1, section.outside));
+  data.sections.forEach((section, i) => panel(section.title, section.items, margin + i % columns * (cellW + gap), y + Math.floor(i / columns) * (cellH + gap), cellW, cellH, options.scale === 'day' ? Math.min(3, Math.max(1, Math.ceil(section.items.length/7))) : 1, section.outside));
   if (data.undated.length) panel('UNDATED TASKS & ROUTINES · Set a date in the task editor to schedule', data.undated, margin, y + gridHeight + gap, inner, undatedHeight, options.scale === 'day' ? 3 : 4);
   text('Empty box = open · Filled box = complete · Checklist ticks show only the current saved occurrence', margin, height - 12, 6.5);
   text(`${options.paper.toUpperCase()} LANDSCAPE · 1 / 1`, width - 132, height - 12, 6.5, BLUE, true);
   svg.push('</svg>');
-  return { svg: svg.join(''), pdf: pdf.output('blob'), smallestFont, taskCount: data.tasks.length };
+  return { svg: svg.join(''), pdf: pdf.output('blob'), smallestFont, taskCount: data.tasks.length, rasterizedLines };
 }
 
 export function downloadBlob(blob: Blob, filename: string) {
