@@ -63,3 +63,17 @@ links DC-10. "Welcome back" restart screen after an absence. Optional cloud sync
 1. **Seed data:** new users get (a) a neutral starter board (Home, Health, Work, People, Money, Me + 6 example tasks) or (b) an empty board with a 2-step "pick some starters" onboarding? *(Recommend b: zero clutter, uses the existing library.)*
 2. **Weekly score:** keep it on by default, or make it opt-in (research says compulsory scoring puts ADHD users off)? *(Recommend opt-in, keeping the existing data.)*
 3. **Orchestrator account:** this session reports Claude A's email. Continue here, or move to Claude B?
+
+## Status (17 Oct 2026, 07:30)
+
+| Batch | State |
+|---|---|
+| 1 Safe (1A data/logic, 1B calendar/quotes/PDF, 1C a11y/responsive) | ✅ merged, reviewed, fixes merged |
+| 2 Planning model, focus mode, quick add | ✅ merged |
+| 3 Today, Week planner, Calendar day window (+ shared Undo) | ✅ merged, reviewed, fixes merged |
+| 4 Unit coverage (every exported function), e2e coverage, axe scans (18, zero serious/critical) | ✅ merged |
+| Extra data-safety: over-limit saves keep a recovery copy; missing areas restored instead of rejecting the board | ✅ merged |
+| Phase 6 gate | ✅ green twice in a row: build, 352 unit, 143 e2e |
+| 5 Production | 🟡 branding, README, CHANGELOG, .gitignore done. **Waiting on you:** delete `preview.html` and the `~` folder (and rename `Start-My-Tasker.cmd`?), LICENSE choice, create `chemisttasker11-ezy/My-Planner` (private/public), push, tag v1.0.0 |
+
+Known, accepted: dates before year 100 get a 1900 offset (documented as `it.fails`). The build warns about a large chunk (main JS ~430 kB); code-splitting is a "later" item.
