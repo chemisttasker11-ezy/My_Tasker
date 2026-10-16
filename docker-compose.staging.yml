@@ -15,7 +15,7 @@ services:
     environment:
       POSTGRES_DB: mytasker
       POSTGRES_USER: mytasker
-      POSTGRES_PASSWORD: "${MYTASKER_DB_PASSWORD:?Set MYTASKER_DB_PASSWORD in env/mytasker.prod.env}"
+      POSTGRES_PASSWORD: "${MYTASKER_DB_PASSWORD:?Set MYTASKER_DB_PASSWORD in env/mytasker.staging.env}"
     volumes:
       - mytasker_staging_pgdata:/var/lib/postgresql/data
     networks:

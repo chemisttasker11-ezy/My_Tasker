@@ -1,4 +1,15 @@
-# My Tasker — Senior Package Testing and Design Acceptance
+# Latest Senior Package Testing — My Tasker release gate
+
+**Code acceptance validated at `e17e04d`:** npm audit; strict TypeScript build and **48 unit tests**; **23 Chromium planner tests** in local demo mode; **4 Chromium signed-in/authenticator-flow tests** with mocked network; **12 Django tests each on SQLite and PostgreSQL**; migration checks; production Docker build; staging/prod Compose validation; health and built-assets checks. [Seven-job CI run](https://github.com/chemisttasker11-ezy/My_Tasker/actions/runs/38886300322).
+
+Run the two browser modes separately. Local planner tests use `VITE_DEMO_MODE=1`, while signed-in AuthGate tests use `VITE_DEMO_MODE=0`; **never** permit the local-demo bypass in production builds.
+
+Current visual evidence is the headless Chromium automated tests and CI screenshots; a person still needs to inspect full mobile/tablet/desktop imagery and use real touch devices. Production/live-provider verification is **not done**. Consult [docs/OVH_DEPLOYMENT.md](OVH_DEPLOYMENT.md) for full service acceptance and rollback.
+
+---
+
+## Historical early Senior Package guidance (superseded where it says PDF/auth incomplete)
+
 
 Workflow adapted from the ChemistTasker Ezy UI/UX Pro Max and Impeccable standing guidance; source: `chemisttasker11-ezy/ChemistTasker-Ezy1/.agents/skills/ui-ux-pro-max/SKILL.md` and `docs/frontend/IMPECCABLE_UI_UX_RULES.md`.
 

@@ -1,4 +1,21 @@
-# My Tasker handover
+# CURRENT PR #1 STATUS — 16 October 2026
+
+This section supersedes the historical extraction handover below, which described a **pre-enhancement snapshot** and is retained only for history.
+
+- Exact audited source HEAD at the time of this status update: `e17e04dfc72106ba7401bfbbf7fde45d22a27c57`. [Acceptance workflow #38886300322](https://github.com/chemisttasker11-ezy/My_Tasker/actions/runs/38886300322) passed **all seven jobs**.
+- Board-first Today/Week planner, searchable source task picker, independent daily copies, drag/reorder, selected-day calendar copy/paste, five statuses and weekly weighted scoring are **implemented and tested**.
+- Dashboard/Today/Completed summaries include independent planned copies; quotes use chosen-day projection; Unicode SVG/PDF tracker includes planned entries.
+- Account signup/login/OTP/CAPTCHA, per-user PostgreSQL boards, revision-guarded autosave, backups, admin authenticator TOTP and user/audit dashboard are **implemented and tested with mocked external providers**. They are not verified live against SMTP or Google reCAPTCHA.
+- Separate OVH-style production and staging Docker Compose, private PostgreSQL volumes, same-origin React/Django container, dedicated env examples, `shared_backend_network` gateway snippets and backup-first deployment scripts have been written and passed Docker/Compose CI checks.
+- **Not completed:** live DNS/TLS/Nginx configuration on OVH; domain CAPTCHA credential registration; real SMTP OTP delivery; secure server env-file provisioning; cross-device/real-device checks on the deployed hostname; independent disaster-recovery restore rehearsal. Do not claim it is released to testers until these pass.
+- Keep PR #1 **draft** until deployment readiness and visual acceptance are confirmed. Do not merge to main or alter the ChemistTasker production stack without a release decision.
+
+See [README.md](README.md), [docs/OVH_DEPLOYMENT.md](docs/OVH_DEPLOYMENT.md) and [docs/SENIOR_PACKAGE_TESTING.md](docs/SENIOR_PACKAGE_TESTING.md).
+
+---
+
+## Historical 16 October extraction handover (superseded)
+
 
 **Prepared:** 16 October 2026, Australia/Brisbane.
 
