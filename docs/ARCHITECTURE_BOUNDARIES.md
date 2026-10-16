@@ -22,7 +22,12 @@ Enforced by `scripts/check-architecture-boundaries.py` on every PR acceptance ru
 | `src/components/calendar/*` | Reusable navigation + day/copy planning dialogs | Date/recurrent task mutations |
 | `src/App.tsx` | Thin orchestrator of pages/handlers | Direct cloud save and schema validation |
 
-`src/lib/lifeLibrary.ts` is intentionally a large *static catalogue*, not a god model. CSS styles are constrained by theme and component ownership instead of artificial overall byte counts.
+`src/lib/lifeLibrary.ts` is intentionally a large *static catalogue*, not a god model. The historical 52 KB base stylesheet is now split, without changing cascade order, into
+`src/styles/legacy-core-dashboard.css`, `legacy-task-board.css`, `legacy-forms-views.css`,
+`legacy-responsive-status.css` and `legacy-calendar.css`. `src/styles.css` is an imports-only
+compatibility entrypoint; add NEW styling to the owning module/component stylesheet,
+not to the legacy bundles. Theme and app-specific overrides remain in `src/styles/*.css`.
+Never reorder these files without reviewed screenshots and a visual regression acceptance.
 
 ## Backend (Django)
 
