@@ -139,9 +139,8 @@ export function WeekPlannerView({ board, planActions, onCapacity, today, navigat
           </section>;
         })}
       </div>
+      </details>
     </section>
-
-    </details></section>
     <div className="week-bottom-grid">
       <section className="panel week-commitments" aria-label="Committed tasks">
         <header className="week-panel-head"><div><h2>My commitments</h2><p>{summary.planned} selected · Postponed work still counts in this week's score.</p></div><Flag size={19}/></header>
