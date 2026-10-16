@@ -40,8 +40,10 @@ export const verifyOtp = (email: string, otp: string) =>
   mutation<{detail: string}>('/api/auth/verify-otp/',{email,otp});
 export const resendOtp = (email: string) =>
   mutation<{detail: string}>('/api/auth/resend-otp/',{email});
-export const login = async (email: string, password: string): Promise<SignedInUser> =>
-  (await mutation<{user: SignedInUser}>('/api/auth/login/',{email,password})).user;
+export interface AdminChallenge {admin_challenge: true; enrolled: boolean}
+export type LoginResult = {user: SignedInUser} | AdminChallenge;
+export const login = (email: string, password: string): Promise<LoginResult> =>
+  mutation<LoginResult>('/api/auth/login/',{email,password});
 export const logout = () => mutation<{detail: string}>('/api/auth/logout/',{});
 export const requestReset = (email: string) => mutation<{detail: string}>('/api/auth/request-password-reset/',{email});
 export const resetPassword = (email: string, otp: string, password: string) =>
@@ -51,3 +53,5 @@ export const saveBoard = (board: BoardState, revision: number) =>
   mutation<{revision: number}>('/api/board/',{board,revision},'PUT');
 export const deleteAccount = (password: string) =>
   mutation<{detail: string}>('/api/account/',{password},'DELETE');
+
+export { json as requestJSON, mutation as sendJSON };

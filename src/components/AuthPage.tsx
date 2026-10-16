@@ -8,7 +8,7 @@ interface CaptchaAPI {
 }
 declare global { interface Window { grecaptcha?: CaptchaAPI } }
 
-export function AuthPage({ onAuthenticated, captchaKey }: {onAuthenticated:(user:api.SignedInUser)=>Promise<void>;captchaKey:string}) {
+export function AuthPage({ onAuthenticated, captchaKey }: {onAuthenticated:(result:api.LoginResult)=>Promise<void>;captchaKey:string}) {
   const [page,setPage]=useState<Page>('login');
   const [email,setEmail]=useState('');
   const [password,setPassword]=useState('');
