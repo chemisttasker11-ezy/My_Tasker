@@ -2,7 +2,7 @@
 
 **An energetic, board-first planner for real life.** React 19, TypeScript, Vite, Django 5.2 and dedicated PostgreSQL storage. Developed independently from ChemistTasker.
 
-**Release status, 16 October 2026:** [PR #1](https://github.com/chemisttasker11-ezy/My_Tasker/pull/1) is still **draft and unmerged**. At code commit `e17e04d`, the exact-head [seven-job acceptance workflow](https://github.com/chemisttasker11-ezy/My_Tasker/actions/runs/38886300322) passed. The OVH environment is **not live-validated**: real HTTPS, SMTP OTP, Google reCAPTCHA, authenticator enrollment and real-user cross-device acceptance must be completed before inviting testers. Do not treat passing CI as evidence of a deployed website.
+**Release status, 16 October 2026:** [PR #1](https://github.com/chemisttasker11-ezy/My_Tasker/pull/1) is still **draft and unmerged**. At code commit `9d134f8`, the [eight-job acceptance workflow](https://github.com/chemisttasker11-ezy/My_Tasker/actions/runs/38894751487) passed, including a real React → Django → disposable PostgreSQL workflow. The OVH environment is **not live-validated**: real HTTPS, SMTP OTP, Google reCAPTCHA, authenticator enrollment and real-user cross-device acceptance must be completed before inviting testers. Do not treat passing CI as evidence of a deployed website.
 
 ## Your 60-second guide
 
@@ -24,6 +24,12 @@
 - Electric-blue, mint-green, bright coral and sunshine-yellow design, strong navy contrast and locally bundled Outfit/Nunito Sans fonts.
 - A separate Django session-authenticated API: verified-email account registration, email OTP, CAPTCHA, login, password recovery, session revocation, private user boards, revision-conflict handling and explicit save-error recovery.
 - A mandatory **authenticator-app 2FA** flow for staff/admin accounts, one-use recovery codes, security overview, user management, protected role changes and admin audit records. The admin API intentionally never returns other users' private task contents.
+
+## Anti-spaghetti architecture
+
+Planner data shape and reducers are owned by `src/domain/*`, independent day/copy flows by `src/lib/planning.ts`, and dashboard/Today metrics by the pure `src/lib/boardSummary.ts`. `src/App.tsx` orchestrates the screens while `useBoardPersistence`, `usePlanningController`, `taskController` and `WorkspaceChrome` own cloud state, planning commands, task CRUD and navigation respectively. Week Planner and administrator views are divided into focused panels. The original large stylesheet was partitioned into five ordered, CSS-equivalent legacy domain files.
+
+Django endpoints are separated between account auth, private boards, system health, MFA setup, privileged user mutations and admin reporting. Compatibility facades preserve existing import contracts. CI enforces ownership/complexity bounds via `scripts/check-architecture-boundaries.py`. See [architecture contract](docs/ARCHITECTURE_BOUNDARIES.md).
 
 ## Local development
 
@@ -55,7 +61,7 @@ From another terminal run `npm run dev` **without** `VITE_DEMO_MODE=1`; the Vite
 
 ## Test and deployment
 
-Automated gate on `e17e04d`: **48 Vitest**, **23 planner Chromium**, **4 authenticated Chromium**, **12 Django SQLite**, **12 Django PostgreSQL**, npm audit, **production Docker image build**, Compose validation, and runtime Django/image checks all passed. See [review evidence](REVIEW.md).
+Automated gate on `9d134f8`: **54 Vitest**, **23 planner Chromium**, **6 authenticated Chromium**, **2 actual React → Django → disposable PostgreSQL browser tests**, **12 Django SQLite**, **12 Django PostgreSQL**, npm audit, **production Docker image build**, Compose isolation checks and runtime Django/image checks all passed. The real-stack job uses simulated SMTP/CAPTCHA; it is not evidence of provider-live delivery. See [review evidence](REVIEW.md).
 
 ```bash
 npm run build
