@@ -425,3 +425,195 @@ describe('recoverable over-limit saves', () => {
     expect(storage.getItem(STORAGE_KEY)).toBe(initial.raw);
   });
 });
+describe('plannedEntries backward-compatibility, migration and validation', () => {
+  it('loads old saved boards and old backups without plannedEntries field unchanged, defaulting plannedEntries to []', () => {
+    const oldBoard = initialState();
+    // Simulate legacy board created before plannedEntries was introduced
+    delete (oldBoard as { plannedEntries?: unknown }).plannedEntries;
+    expect((oldBoard as { plannedEntries?: unknown }).plannedEntries).toBeUndefined();
+
+    const warnings: string[] = [];
+    const migrated = validateImported(JSON.parse(JSON.stringify(oldBoard)), warnings);
+    expect(migrated.plannedEntries).toEqual([]);
+    expect(warnings).toEqual([]);
+    expect(migrated.tasks.length).toBe(oldBoard.tasks.length);
+    expect(migrated.completions).toEqual(oldBoard.completions);
+
+    // Stored-board loader also handles legacy boards without plannedEntries
+    const mockStorage: Storage = {
+      getItem: (key: string) => key === STORAGE_KEY ? JSON.stringify(oldBoard) : null,
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+      key: () => null,
+      length: 1
+    };
+    const loaded = loadBoard(mockStorage);
+    expect(loaded.board.plannedEntries).toEqual([]);
+    expect(loaded.warning).toBe('');
+    expect(loaded.recovery).toBeUndefined();
+  });
+
+  it('validates planned entries within limits, trimming extra entries over 5000 with a warning', () => {
+    const board = initialState();
+    const taskId = board.tasks[0].id;
+    board.plannedEntries = Array.from({ length: 5005 }, (_, i) => ({
+      id: `plan-${i}`,
+      sourceTaskId: taskId,
+      date: '2026-10-19',
+      order: i,
+      status: 'not-started',
+      title: `Plan ${i}`,
+      checklist: [{ id: `item-${i}`, title: 'Step', done: false }],
+      createdAt: new Date().toISOString()
+    }));
+
+    const warnings: string[] = [];
+    const validated = validateImported(board, warnings);
+    expect(validated.plannedEntries?.length).toBe(5000);
+    expect(warnings.some(w => w.includes('Planned entries exceeded 5000'))).toBe(true);
+  });
+
+  it('trims checklist items over 100 with a warning', () => {
+    const board = initialState();
+    const taskId = board.tasks[0].id;
+    board.plannedEntries = [{
+      id: 'plan-with-many-items',
+      sourceTaskId: taskId,
+      date: '2026-10-19',
+      order: 0,
+      status: 'not-started',
+      title: 'Dense Plan',
+      checklist: Array.from({ length: 110 }, (_, i) => ({ id: `c-${i}`, title: `Item ${i}`, done: false })),
+      createdAt: new Date().toISOString()
+    }];
+
+    const warnings: string[] = [];
+    const validated = validateImported(board, warnings);
+    expect(validated.plannedEntries?.[0].checklist.length).toBe(100);
+    expect(warnings.some(w => w.includes('checklist exceeded 100'))).toBe(true);
+  });
+
+  it('drops invalid planned entries with a warning, goes through JSON.parse, and prevents prototype pollution from __proto__ / constructor keys', () => {
+    const board = initialState();
+    const validTaskId = board.tasks[0]?.id ?? 'task-1';
+    const rawPayload = JSON.stringify({
+      version: 1,
+      revision: 0,
+      tasks: board.tasks,
+      completions: [],
+      weekPlans: {},
+      dailyFocus: {},
+      areas: board.areas,
+      theme: 'light',
+      plannedEntries: [
+        // 1. Valid entry
+        {
+          id: 'valid-entry-1',
+          sourceTaskId: validTaskId,
+          date: '2026-10-19',
+          order: 0,
+          startTime: '09:30',
+          durationMin: 45,
+          status: 'started',
+          title: 'Valid task copy',
+          checklist: [{ id: 'chk-1', title: 'First step', done: true }],
+          notes: 'Some notes',
+          createdAt: '2026-10-19T00:00:00.000Z'
+        },
+        // 2. Invalid date
+        {
+          id: 'bad-date',
+          sourceTaskId: validTaskId,
+          date: 'invalid-date',
+          order: 1,
+          status: 'not-started',
+          title: 'Bad date',
+          checklist: [],
+          createdAt: '2026-10-19T00:00:00.000Z'
+        },
+        // 3. String over 250 characters
+        {
+          id: 'too-long-title',
+          sourceTaskId: validTaskId,
+          date: '2026-10-19',
+          order: 2,
+          status: 'not-started',
+          title: 'x'.repeat(251),
+          checklist: [],
+          createdAt: '2026-10-19T00:00:00.000Z'
+        },
+        // 4. Invalid status
+        {
+          id: 'bad-status',
+          sourceTaskId: validTaskId,
+          date: '2026-10-19',
+          order: 3,
+          status: 'non-existent-status',
+          title: 'Bad status',
+          checklist: [],
+          createdAt: '2026-10-19T00:00:00.000Z'
+        },
+        // 5. Invalid time
+        {
+          id: 'bad-time',
+          sourceTaskId: validTaskId,
+          date: '2026-10-19',
+          order: 4,
+          startTime: '99:99',
+          status: 'not-started',
+          title: 'Bad time',
+          checklist: [],
+          createdAt: '2026-10-19T00:00:00.000Z'
+        },
+        // 6. Invalid checklist (item has non-boolean done)
+        {
+          id: 'bad-checklist',
+          sourceTaskId: validTaskId,
+          date: '2026-10-19',
+          order: 5,
+          status: 'not-started',
+          title: 'Bad checklist',
+          checklist: [{ id: 'bad-item', title: 'Item', done: 'yes' }],
+          createdAt: '2026-10-19T00:00:00.000Z'
+        }
+      ]
+    });
+
+    // Splice in "__proto__" and "constructor" keys into the JSON payload
+    const maliciousJson = rawPayload.replace(
+      '"plannedEntries":[',
+      '"__proto__":{"pollutedTopLevel":"yes"},"constructor":{"prototype":{"pollutedCtor":"yes"}},"plannedEntries":[{"id":"proto-entry","sourceTaskId":"' +
+        validTaskId +
+        '","date":"2026-10-19","order":6,"status":"not-started","title":"Proto injection","checklist":[],"__proto__":{"pollutedEntry":"yes"},"constructor":{"prototype":{"pollutedEntryCtor":"yes"}}},'
+    );
+
+    const parsed = JSON.parse(maliciousJson);
+
+    const warnings: string[] = [];
+    const validated = validateImported(parsed, warnings);
+
+    // Verify prototype pollution was prevented
+    expect(({} as Record<string, unknown>).pollutedTopLevel).toBeUndefined();
+    expect(({} as Record<string, unknown>).pollutedCtor).toBeUndefined();
+    expect(({} as Record<string, unknown>).pollutedEntry).toBeUndefined();
+    expect(({} as Record<string, unknown>).pollutedEntryCtor).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty('pollutedTopLevel')).toBe(false);
+    expect(Object.prototype.hasOwnProperty('pollutedCtor')).toBe(false);
+    expect(Object.prototype.hasOwnProperty('pollutedEntry')).toBe(false);
+    expect(Object.prototype.hasOwnProperty('pollutedEntryCtor')).toBe(false);
+
+    // Board was NOT rejected: all tasks are intact
+    expect(validated.tasks.length).toBe(board.tasks.length);
+    // Only valid entries are kept, invalid ones dropped with warnings
+    const keptIds = validated.plannedEntries?.map(e => e.id) ?? [];
+    expect(keptIds).toContain('valid-entry-1');
+    expect(keptIds).not.toContain('bad-date');
+    expect(keptIds).not.toContain('too-long-title');
+    expect(keptIds).not.toContain('bad-status');
+    expect(keptIds).not.toContain('bad-time');
+    expect(keptIds).not.toContain('bad-checklist');
+    expect(warnings.length).toBeGreaterThanOrEqual(5);
+  });
+});
+

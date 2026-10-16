@@ -61,6 +61,26 @@ export interface WeeklyPlan {
   commitments: WeeklyCommitment[];
   review: WeekReview | null;
 }
+export interface PlannedEntryChecklistItem {
+  id: string;
+  title: string;
+  done: boolean;
+}
+
+export interface PlannedEntry {
+  id: string;
+  sourceTaskId: string;
+  date: string;
+  order: number;
+  startTime?: string;
+  durationMin?: number;
+  status: TaskStatus;
+  title: string;
+  checklist: PlannedEntryChecklistItem[];
+  notes?: string;
+  createdAt: string;
+}
+
 export interface BoardState {
   revision?: number;
   weeklyScoreEnabled?: boolean;
@@ -73,7 +93,9 @@ export interface BoardState {
   theme: 'light' | 'dark';
   weekPlans: Record<string, WeeklyPlan>;
   dailyFocus: Record<string, string[]>;
+  plannedEntries?: PlannedEntry[];
 }
+
 
 export const LANES: { id: Lane; title: string; description: string; emoji: string; tone: string }[] = [
   { id: 'urgent', title: 'Urgent', description: 'Needs my attention', emoji: '🔥', tone: 'coral' },
@@ -94,7 +116,7 @@ export const CATEGORIES: Area[] = [
 ];
 
 export const NEUTRAL_AREAS: Area[] = ['Home', 'Health', 'Work', 'People', 'Money', 'Me'].map(id => ({ id, emoji: '●', tone: 'teal' }));
-export const LIMITS = { tasks: 10000, completions: 50000, areas: 40, checklist: 100, weeks: 260, focusDates: 1100, commitments: 150 };
+export const LIMITS = { tasks: 10000, completions: 50000, areas: 40, checklist: 100, weeks: 260, focusDates: 1100, commitments: 150, plannedEntries: 5000, title: 250, notes: 250 };
 
 const DEFAULT_RECURRENCE: Record<Lane, Recurrence> = {
   urgent: 'none', daily: 'daily', weekly: 'weekly', monthly: 'monthly', quarterly: 'quarterly', goals: 'none'
@@ -348,7 +370,7 @@ export function createTask(values: Partial<Task> & Pick<Task, 'title'>): Task {
 }
 
 export function initialState(): BoardState {
-  return { version: 1, revision: 0, weeklyScoreEnabled: false, onboardingStep: 1, areas: NEUTRAL_AREAS.map(a => ({ ...a })), theme: 'light', completions: [], weekPlans: {}, dailyFocus: {}, tasks: [] };
+  return { version: 1, revision: 0, weeklyScoreEnabled: false, onboardingStep: 1, areas: NEUTRAL_AREAS.map(a => ({ ...a })), theme: 'light', completions: [], weekPlans: {}, dailyFocus: {}, tasks: [], plannedEntries: [] };
 }
 
 /** Publish edits synchronously for controlled inputs; serialize only persistence.
@@ -418,7 +440,7 @@ function validTimestamp(value: unknown): boolean {
   return value === undefined || value === '' || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
 }
 
-function validISODate(value: unknown): value is string {
+export function validISODate(value: unknown): value is string {
   if (typeof value !== 'string') return false;
   if (value === '') return true;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -541,11 +563,122 @@ export function validateImported(raw: unknown, warnings: string[] = []): BoardSt
       dailyFocus[key] = trim(ids, 3, 'Daily priorities');
     }
   }
+  const plannedEntries: PlannedEntry[] = [];
+  if (obj.plannedEntries !== undefined && obj.plannedEntries !== null) {
+    if (!Array.isArray(obj.plannedEntries)) {
+      warnings.push('Invalid planned entries in backup; reset to empty.');
+    } else {
+      const rawEntries = obj.plannedEntries.length > LIMITS.plannedEntries
+        ? (warnings.push(`Planned entries exceeded ${LIMITS.plannedEntries}; extra entries were trimmed.`), obj.plannedEntries.slice(0, LIMITS.plannedEntries))
+        : obj.plannedEntries;
+      const seenEntryIds = new Set<string>();
+      for (const rawEntry of rawEntries) {
+        if (!rawEntry || typeof rawEntry !== 'object') {
+          warnings.push('Dropped invalid planned entry: not an object.');
+          continue;
+        }
+        const e = rawEntry as Partial<PlannedEntry>;
+        if (typeof e.id !== 'string' || !e.id || e.id.length > 250 || seenEntryIds.has(e.id)) {
+          warnings.push('Dropped invalid planned entry: invalid or duplicate id.');
+          continue;
+        }
+        if (typeof e.sourceTaskId !== 'string' || !e.sourceTaskId || e.sourceTaskId.length > 250) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid sourceTaskId.`);
+          continue;
+        }
+        if (!validISODate(e.date) || !e.date || e.date.length !== 10) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid date.`);
+          continue;
+        }
+        if (typeof e.order !== 'number' || !Number.isFinite(e.order)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid order.`);
+          continue;
+        }
+        if (typeof e.title !== 'string' || !e.title || e.title.length > LIMITS.title) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid title.`);
+          continue;
+        }
+        if (typeof e.status !== 'string' || !statuses.has(e.status as TaskStatus)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid status.`);
+          continue;
+        }
+        if (e.startTime !== undefined && (typeof e.startTime !== 'string' || (e.startTime !== '' && !validTime(e.startTime)) || e.startTime.length > 250)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid startTime.`);
+          continue;
+        }
+        if (e.durationMin !== undefined && (typeof e.durationMin !== 'number' || !Number.isFinite(e.durationMin) || e.durationMin < 0 || e.durationMin > 100000)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid durationMin.`);
+          continue;
+        }
+        if (e.notes !== undefined && (typeof e.notes !== 'string' || e.notes.length > LIMITS.notes)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid notes.`);
+          continue;
+        }
+        if (e.createdAt !== undefined && !validTimestamp(e.createdAt)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid createdAt.`);
+          continue;
+        }
+        if (!Array.isArray(e.checklist)) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: checklist must be an array.`);
+          continue;
+        }
+        const rawChecklist = e.checklist.length > LIMITS.checklist
+          ? (warnings.push(`Planned entry ${e.id} checklist exceeded ${LIMITS.checklist}; extra items were trimmed.`), e.checklist.slice(0, LIMITS.checklist))
+          : e.checklist;
+        let checklistValid = true;
+        const seenChecklistIds = new Set<string>();
+        const checklistItems: PlannedEntryChecklistItem[] = [];
+        for (const rawItem of rawChecklist) {
+          if (!rawItem || typeof rawItem !== 'object') {
+            checklistValid = false;
+            break;
+          }
+          const item = rawItem as Partial<PlannedEntryChecklistItem>;
+          if (typeof item.id !== 'string' || !item.id || item.id.length > 250) {
+            checklistValid = false;
+            break;
+          }
+          if (typeof item.title !== 'string' || item.title.length > 250) {
+            checklistValid = false;
+            break;
+          }
+          if (typeof item.done !== 'boolean') {
+            checklistValid = false;
+            break;
+          }
+          let itemId = item.id;
+          if (seenChecklistIds.has(itemId)) {
+            itemId = generateId();
+          }
+          seenChecklistIds.add(itemId);
+          checklistItems.push({ id: itemId, title: item.title, done: item.done });
+        }
+        if (!checklistValid) {
+          warnings.push(`Dropped invalid planned entry ${e.id}: invalid checklist item.`);
+          continue;
+        }
+        seenEntryIds.add(e.id);
+        plannedEntries.push({
+          id: e.id,
+          sourceTaskId: e.sourceTaskId,
+          date: e.date,
+          order: e.order,
+          startTime: e.startTime || undefined,
+          durationMin: e.durationMin !== undefined ? Math.round(e.durationMin) : undefined,
+          status: e.status as TaskStatus,
+          title: e.title,
+          checklist: checklistItems,
+          notes: e.notes !== undefined && e.notes !== '' ? e.notes : undefined,
+          createdAt: typeof e.createdAt === 'string' && e.createdAt ? e.createdAt : new Date().toISOString()
+        });
+      }
+    }
+  }
   let quotes = obj.quotes;
   if (quotes && Array.isArray(quotes.custom) && quotes.daily && typeof quotes.daily === 'object' && !Array.isArray(quotes.daily)) {
     quotes = { ...quotes, custom: trim(quotes.custom, 100, 'Custom quotes'), daily: Object.fromEntries(trim(Object.entries(quotes.daily), 1500, 'Daily quotes')) };
   }
-  return { revision: Number.isSafeInteger(obj.revision) && obj.revision! >= 0 ? obj.revision : 0, weeklyScoreEnabled: typeof obj.weeklyScoreEnabled === 'boolean' ? obj.weeklyScoreEnabled : Object.values(weekPlans).some(p => p.commitments.length > 0 || p.review !== null), onboardingStep: obj.onboardingStep === 1 || obj.onboardingStep === 2 ? obj.onboardingStep : undefined, version: 1, tasks, completions, weekPlans, dailyFocus, areas, quotes: validateQuoteSettings(quotes), theme: obj.theme === 'dark' ? 'dark' : 'light' };
+  return { revision: Number.isSafeInteger(obj.revision) && obj.revision! >= 0 ? obj.revision : 0, weeklyScoreEnabled: typeof obj.weeklyScoreEnabled === 'boolean' ? obj.weeklyScoreEnabled : Object.values(weekPlans).some(p => p.commitments.length > 0 || p.review !== null), onboardingStep: obj.onboardingStep === 1 || obj.onboardingStep === 2 ? obj.onboardingStep : undefined, version: 1, tasks, completions, weekPlans, dailyFocus, areas, quotes: validateQuoteSettings(quotes), theme: obj.theme === 'dark' ? 'dark' : 'light', plannedEntries };
 }
 
 /** A weekly plan remains explicit, so postponement cannot silently inflate progress. */

@@ -1,0 +1,493 @@
+/* Planning workflow styles (BoardPicker, DayPlan, PlannedEntryCard) */
+
+/* --- PlannedEntryCard --- */
+.planned-entry-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.planned-entry-card.is-dragging {
+  opacity: 0.85;
+  box-shadow: 0 10px 24px rgba(22, 72, 223, 0.2);
+  transform: scale(1.02);
+  z-index: 10;
+}
+
+/* 44px touch targets */
+.planned-entry-card .icon-button,
+.planned-entry-card .icon-button.small {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+}
+
+.planned-entry-card .drag-handle,
+.board-picker-drag {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+}
+
+.planned-entry-card.is-done {
+  opacity: 0.95;
+}
+
+.planned-entry-card.is-done .planned-entry-title {
+  color: var(--positive);
+  text-decoration: line-through;
+}
+
+.planned-entry-title {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.planned-entry-title:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.planned-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.planned-entry-time,
+.planned-entry-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--subtle);
+  background: var(--soft-purple);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.planned-entry-notes {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+/* Checklist in card */
+.planned-entry-checklist-block {
+  margin-top: 4px;
+}
+
+.planned-entry-checklist-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.planned-entry-checklist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 44px;
+  padding: 0 4px;
+}
+
+.planned-entry-checklist-btn .chevron-icon {
+  transition: transform 0.15s ease;
+}
+
+.planned-entry-checklist-btn .chevron-icon.is-open {
+  transform: rotate(180deg);
+}
+
+.planned-entry-checklist-items {
+  list-style: none;
+  margin: 8px 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planned-entry-checklist-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.planned-entry-checklist-row input[type='checkbox'] {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--purple);
+  flex-shrink: 0;
+}
+
+.planned-entry-checklist-row .item-done {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+/* Card footer actions */
+.planned-entry-footer {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.planned-entry-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.planned-entry-day-btn,
+.planned-entry-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-height: 44px;
+}
+
+/* Move to day popup */
+.planned-entry-move-popup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--soft-purple);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.planned-entry-move-popup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.planned-entry-move-popup input[type='date'] {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 44px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.planned-entry-move-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* --- DayPlan --- */
+.day-plan-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--lane-bg);
+  border-radius: 14px;
+  padding: 14px;
+  min-height: 120px;
+  transition: background-color 0.15s ease;
+}
+
+.day-plan-container.is-over {
+  background: color-mix(in srgb, var(--soft-purple) 80%, var(--purple));
+  outline: 2px dashed var(--purple);
+  outline-offset: -2px;
+}
+
+.day-plan-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.day-plan-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.day-plan-count {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  background: var(--paper);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+
+.day-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.day-plan-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 16px;
+  text-align: center;
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper) 60%, transparent);
+}
+
+.day-plan-empty p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.sortable-card-wrapper {
+  touch-action: manipulation;
+}
+
+/* --- BoardPicker --- */
+.board-picker-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+}
+
+.board-picker-header {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.board-picker-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.board-picker-title-row h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.board-picker-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.board-picker-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.board-picker-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+}
+
+.board-picker-search svg {
+  position: absolute;
+  left: 12px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.board-picker-search input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 46px 8px 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--input);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.board-picker-clear {
+  position: absolute;
+  right: 2px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+}
+
+.board-picker-filter {
+  min-height: 44px;
+}
+
+.board-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 520px;
+  overflow-y: auto;
+}
+
+.board-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.board-picker-row:hover {
+  background: var(--soft-purple);
+}
+
+.board-picker-row.is-dragging {
+  opacity: 0.6;
+}
+
+.board-picker-row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.board-picker-drag {
+  flex-shrink: 0;
+}
+
+.board-picker-task-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.board-picker-task-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.board-picker-title-btn {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.board-picker-title-btn:hover {
+  color: var(--purple);
+}
+
+.board-picker-add-button {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  min-height: 44px;
+  padding: 8px 14px;
+}
+
+.board-picker-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .planned-entry-card,
+  .day-plan-container,
+  .board-picker-row,
+  .chevron-icon {
+    transition: none !important;
+    animation: none !important;
+  }
+}
