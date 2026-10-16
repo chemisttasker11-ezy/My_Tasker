@@ -82,14 +82,29 @@ Both configurations match the local build. Netlify includes a fallback to `index
 
 ## Screenshots
 
-Screenshot paths reserved for future captures; these images are not included yet:
+Screenshots use a neutral demo board with fictional tasks. Desktop captures are 1440×900; mobile is 390×844.
 
-- Today: `docs/screenshots/today.png`
-- Task board: `docs/screenshots/task-board.png`
-- Week planner: `docs/screenshots/week-planner.png`
-- Calendar day planning: `docs/screenshots/calendar.png`
-- Focus mode: `docs/screenshots/focus-mode.png`
-- Printable tracker: `docs/screenshots/printable-tracker.png`
+![Today](docs/screenshots/today.png)
+
+| View | Screenshot |
+| --- | --- |
+| Today on mobile | [today-mobile.png](docs/screenshots/today-mobile.png) |
+| Today in dark theme | [today-dark.png](docs/screenshots/today-dark.png) |
+| Focus mode | [focus.png](docs/screenshots/focus.png) |
+| Task board | [board.png](docs/screenshots/board.png) |
+| Week planner | [week.png](docs/screenshots/week.png) |
+| Calendar | [calendar.png](docs/screenshots/calendar.png) |
+| Calendar day planning window | [calendar-day.png](docs/screenshots/calendar-day.png) |
+| Printable tracker | [tracker.png](docs/screenshots/tracker.png) |
+| Settings & backup | [settings.png](docs/screenshots/settings.png) |
+
+To regenerate from the repository root (normal test runs skip this spec):
+
+```sh
+CAPTURE_SCREENSHOTS=1 npx playwright test tests/readme-screenshots.spec.ts
+```
+
+In PowerShell, use `$env:CAPTURE_SCREENSHOTS='1'; npx.cmd playwright test tests/readme-screenshots.spec.ts`, then `Remove-Item Env:CAPTURE_SCREENSHOTS` before running normal tests.
 
 ## Project history
 
