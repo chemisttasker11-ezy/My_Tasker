@@ -4,6 +4,7 @@ import { type BoardState } from '../model';
 import { shiftCalendar, type CalendarScale } from '../lib/calendar';
 import { trackerData, type TrackerOptions } from '../lib/tracker';
 import { dailyQuote, quoteSettings } from '../lib/quotes';
+import { relevantTasksForDate } from '../lib/planProjection';
 import { buildTrackerDocument, downloadBlob, type TrackerDocument } from '../lib/trackerPdf';
 
 export interface TrackerLaunch { anchor: string; scale: CalendarScale; area?: string }
@@ -16,7 +17,7 @@ export function TrackerView({ board, launch }: { board: BoardState; launch: Trac
   const [zoom, setZoom] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
   const data = useMemo(() => trackerData(board, options), [board, options]);
-  const quote = dailyQuote(board.quotes, options.anchor, data.tasks);
+  const quote = dailyQuote(board.quotes, options.anchor, relevantTasksForDate(board, options.anchor));
   const direction = quoteSettings(board.quotes).direction;
   useEffect(() => {
     let cancelled = false; let url = '';

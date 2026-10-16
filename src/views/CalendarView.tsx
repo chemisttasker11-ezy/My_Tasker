@@ -5,10 +5,11 @@ import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace
 import type { BoardState } from '../model';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
 import { type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
-import { addDays, calendarOccurrences, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
+import { addDays, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
 import { formatDate } from '../lib/display';
 import { CalendarEntry } from '../components/CalendarEntry';
 import { STATUS_LABEL, STATUS_ORDER, visibleStatus } from '../lib/progress';
+import { projectSchedule } from '../lib/planProjection';
 
 const SCALES: { id: CalendarScale; label: string }[] = [
   { id: 'day', label: 'Day' }, { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }, { id: 'year', label: 'Year' }
@@ -44,13 +45,13 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
     (!search.trim() || `${t.title} ${t.description} ${t.category}`.toLowerCase().includes(search.trim().toLowerCase()))
   ), [tasks, category, search]);
   const range = visibleRange(anchor, scale);
-  const occurrences = useMemo(() => calendarOccurrences(filtered, completions, range.start, range.end), [filtered, completions, range.start, range.end]);
+  const occurrences = useMemo(() => projectSchedule(board, range.start, range.end, category, filtered).legacy, [board, filtered, range.start, range.end, category]);
   const byDay = useMemo(() => {
     const result = new Map<string, CalendarOccurrence[]>();
     for (const occurrence of occurrences) result.set(occurrence.date, [...result.get(occurrence.date) ?? [], occurrence]);
     return result;
   }, [occurrences]);
-  const plannedByDay = board.plannedEntries;
+  const plannedByDay = board.plannedEntries.filter(e => (category === 'All' || e.category === category) && (!search.trim() || `${e.title} ${e.description} ${e.category}`.toLowerCase().includes(search.trim().toLowerCase())));
   const unscheduled = filtered.filter(task => !task.dueDate && !task.completedAt);
   const addAt = (date: string) => onEdit(null, 'urgent', date);
   const edit = (task: Task) => onEdit(task);
@@ -68,6 +69,7 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
   }
   function openDay(date: string) { setPlanningDay(date); }
   const dayEntries = byDay.get(anchor) ?? [];
+  const plannedOnDay = plannedByDay.filter(e => e.date === anchor);
   const withTime = dayEntries.filter(item => item.task.scheduledTime);
   const anytime = dayEntries.filter(item => !item.task.scheduledTime);
   const otherHours = withTime.filter(item => { const h = Number(item.task.scheduledTime.slice(0, 2)); return h < 6 || h > 22; });
@@ -111,16 +113,20 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
       <div className="calendar-main">
         {scale === 'day' && <section className="panel calendar-day">
           <div className="calendar-day-heading"><CalendarDays size={19}/><h3>{dateTitle(anchor, 'day')}</h3><button type="button" className="button button-secondary" onClick={() => openDay(anchor)}><Plus size={15}/> Plan day</button></div>
-          <div className="calendar-anytime" {...dropProps(anchor)}><h3>Anytime</h3>{anytime.length ? anytime.map(item => entry(item)) : <p>Nothing scheduled without a time. Add a task or drag one here.</p>}</div>
+          <div className="calendar-anytime" {...dropProps(anchor)}><h3>Anytime</h3>
+            {plannedOnDay.filter(e=>!e.scheduledTime).map(e=><button key={e.id} type="button" className="calendar-chip plan-calendar-chip" onClick={()=>openDay(anchor)}>{e.title} · {e.status}</button>)}
+            {anytime.length ? anytime.map(item => entry(item)) : !plannedOnDay.some(e=>!e.scheduledTime) && <p>Nothing scheduled without a time. Open the day planner to add a copy.</p>}</div>
           <div className="calendar-hours">{HOURS.map(hour => <div key={hour} className="calendar-hour" {...dropProps(anchor)}>
             <div className="calendar-hour-label">{String(hour).padStart(2, '0')}:00</div>
-            <div className="calendar-hour-body">{withTime.filter(item => Number(item.task.scheduledTime.slice(0, 2)) === hour).map(item => entry(item))}</div>
+            <div className="calendar-hour-body">
+              {plannedOnDay.filter(e=>e.scheduledTime && Number(e.scheduledTime.slice(0,2)) === hour).map(e=><button key={e.id} className="calendar-chip plan-calendar-chip" onClick={()=>openDay(anchor)}>{e.scheduledTime} · {e.title}</button>)}
+              {withTime.filter(item => Number(item.task.scheduledTime.slice(0, 2)) === hour).map(item => entry(item))}</div>
           </div>)}{otherHours.length > 0 && <div className="calendar-hour"><div className="calendar-hour-label">Other</div><div className="calendar-hour-body">{otherHours.map(item => entry(item))}</div></div>}</div>
         </section>}
         {scale === 'week' && <div className="calendar-week-scroller"><div className="calendar-week" role="grid" aria-label="Weekly calendar">
           {Array.from({ length: 7 }, (_, i) => addDays(range.start, i)).map(date => <section className={`calendar-week-day ${date === today ? 'is-today' : ''}`} key={date} data-testid={`calendar-date-${date}`} {...dropProps(date)}>
             <div className="calendar-week-heading"><button onClick={() => openDay(date)}><span>{WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]}</span><strong>{date.slice(-2)}</strong></button><button aria-label={`Add task on ${date}`} onClick={() => openDay(date)}><Plus size={15}/></button></div>
-            <div className="calendar-week-items">{(byDay.get(date) ?? []).map(item => entry(item))}{!(byDay.get(date)?.length) && <p className="calendar-week-empty">Drop a task or add one</p>}</div>
+            <div className="calendar-week-items">{plannedByDay.filter(e=>e.date===date).map(e=><button key={e.id} type="button" className="calendar-chip plan-calendar-chip" onClick={()=>openDay(date)}>{e.title} · {e.status}</button>)}{(byDay.get(date) ?? []).map(item => entry(item))}{!(byDay.get(date)?.length) && !plannedByDay.some(e=>e.date===date) && <p className="calendar-week-empty">Drop a task or add one</p>}</div>
           </section>)}
         </div></div>}
         {scale === 'month' && <div className="panel calendar-month" role="grid" aria-label="Monthly calendar">

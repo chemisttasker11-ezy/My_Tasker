@@ -47,7 +47,8 @@ export function scoreWeek(plan: WeeklyPlan | undefined, state: Pick<BoardState, 
     const completedInWeek = state.completions.some(c =>
       c.taskId === commitment.taskId && completedOnDate(c.completedAt) >= weekStart && completedOnDate(c.completedAt) <= end);
     // For past and future weeks, never rewrite history using today's live status.
-    const status: TaskStatus = commitment.entryId ? (currentWeek && entry ? entry.status : 'not-started') : completedInWeek ? 'finished' :
+    const activeHere = Boolean(entry && entry.date >= weekStart && entry.date <= end);
+    const status: TaskStatus = commitment.entryId ? (currentWeek && activeHere && entry ? entry.status : 'not-started') : completedInWeek ? 'finished' :
       currentWeek && task && !task.archivedAt
         ? (task.status === 'finished' ? 'not-started' : task.status)
         : 'not-started';

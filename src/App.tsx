@@ -24,6 +24,7 @@ import type { TrackerLaunch } from './views/TrackerView';
 import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
 import { dailyQuote, quoteSettings } from './lib/quotes';
+import { relevantTasksForDate } from './lib/planProjection';
 import { Library, Quote, Printer } from 'lucide-react';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
 
@@ -183,7 +184,7 @@ export default function App() {
     setBoard(initialState()); navigate('overview'); alertNotice('Original notebook tasks restored');
   }
   const selectedNav = NAV.find(n => n.id === view);
-  const reminder = dailyQuote(board.quotes, day, todayTasks);
+  const reminder = dailyQuote(board.quotes, day, relevantTasksForDate(board,day));
   function addTemplates(ids: string[]) {
     setBoard(current => addLifeTemplates(current, ids));
     alertNotice('Life tasks added with notes and checklists. Set dates whenever you are ready.');
@@ -213,7 +214,7 @@ export default function App() {
         {saveError && <div className="save-warning" role="alert">Browser storage is unavailable or full. Export your work before leaving this page.</div>}
         {view !== 'tracker' && view !== 'quotes' && <section className="direction-banner" aria-label="Daily inspiration"><div><span>MY DIRECTION</span><p>{quoteSettings(board.quotes).direction || 'Choose a reminder of what matters to you.'}</p></div><div><span>TODAY’S REMINDER</span><p>{reminder.text}</p></div><button className="icon-button" aria-label="Edit direction and quotes" onClick={() => navigate('quotes')}><Quote size={18}/></button></section>}
         {view === 'library' && <LibraryView tasks={board.tasks} onAdd={addTemplates}/>}
-        {view === 'quotes' && <QuotesView value={board.quotes} today={day} tasks={todayTasks} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
+        {view === 'quotes' && <QuotesView value={board.quotes} today={day} board={board} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
         {view === 'tracker' && <Suspense fallback={<p role="status">Loading your tracker…</p>}><TrackerView board={board} launch={trackerLaunch}/></Suspense>}
         {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={showEditor} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore}/>}
         {view === 'board' && <BoardView visible={visible} search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} selectedLane={selectedLane} setSelectedLane={setSelectedLane} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask} moveTask={moveTask} archiveTask={archiveTask} duplicateTask={duplicateTask} changeStatus={changeStatus} toggleSubtask={toggleSubtask}/>}

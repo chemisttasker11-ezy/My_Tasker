@@ -1,5 +1,6 @@
 import { generateId, type BoardState, type PlannedEntry, type TaskStatus, type WeeklyPlan, type Task } from '../model';
-import { addDays, calendarOccurrences, mondayOf } from './calendar';
+import { addDays, mondayOf } from './calendar';
+import { projectSchedule } from './planProjection';
 
 /** DataTransfer contract shared across Today, Week, Calendar and the board palette. */
 export const PLAN_DRAG_MIME = 'application/x-my-tasker-plan';
@@ -60,7 +61,11 @@ export function moveEntry(state: BoardState, id: string, toDate: string, toIndex
   const index = new Map(changed.map(e => [e.id, e]));
   const dailyFocus = moving.date === toDate ? state.dailyFocus :
     { ...state.dailyFocus, [moving.date]: (state.dailyFocus[moving.date] ?? []).filter(v => v !== id) };
-  return { ...state, dailyFocus, plannedEntries: state.plannedEntries.map(e => index.get(e.id) ?? e) };
+  const updated: BoardState = { ...state, dailyFocus, plannedEntries: state.plannedEntries.map(e => index.get(e.id) ?? e) };
+  // A move across the week boundary starts a new commitment; the original
+  // week retains its commitment at zero instead of silently erasing the miss.
+  return mondayOf(moving.date) === mondayOf(toDate) ? updated :
+    withCommitment(updated, destination[position] as PlannedEntry);
 }
 export function setEntryStatus(state: BoardState, id: string, status: TaskStatus, now = new Date()): BoardState {
   if (!['not-started', 'started', 'progressing', 'finished', 'postponed'].includes(status)) return state;
@@ -114,7 +119,7 @@ export interface DayClipboard { days: CopyDay[]; }
 export function copyDays(state: BoardState, dates: string[]): DayClipboard {
   const selected = [...new Set(dates.filter(isDate))].sort().slice(0, 31);
   const first = selected[0], last = selected.at(-1);
-  const projected = first && last ? calendarOccurrences(state.tasks, state.completions, first, last) : [];
+  const projected = first && last ? projectSchedule(state, first, last).legacy : [];
   return { days: selected.map(date => {
     const saved = entriesForDay(state, date);
     const legacy = projected.filter(o => o.date === date).map(o => fromTask(o.task));
