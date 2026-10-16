@@ -357,3 +357,12 @@ export function refreshFromSource(board: BoardState, entryId: string): BoardStat
     plannedEntries: entries.map(e => (e.id === entryId ? updatedEntry : e))
   };
 }
+
+/** Restore an exact removed snapshot and shift subsequent entries to keep order unique. */
+export function restoreEntry(board: BoardState, entry: PlannedEntry): BoardState {
+  const entries = board.plannedEntries ?? [];
+  if (entries.some(e => e.id === entry.id)) return board;
+  return { ...board, plannedEntries: [...entries.map(e =>
+    e.date === entry.date && e.order >= entry.order ? { ...e, order: e.order + 1 } : e
+  ), structuredClone(entry)] };
+}

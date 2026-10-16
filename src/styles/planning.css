@@ -36,6 +36,7 @@
   min-height: 44px;
   width: 44px;
   height: 44px;
+  touch-action: none;
 }
 
 .planned-entry-card.is-done {
@@ -491,3 +492,22 @@
     animation: none !important;
   }
 }
+
+/* Optional compact variant; existing Today/calendar cards keep their full layout. */
+.compact-entry { min-width: 0; }
+.compact-entry .planned-entry-title { display: block; width: 100%; font-size: 14px; overflow-wrap: anywhere; min-height: 44px; }
+.compact-entry-time { font-size: 12px; overflow-wrap: anywhere; }
+.compact-status { display: flex; align-items: center; gap: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.compact-status > span:first-child { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--muted); }
+.compact-status.status-finished > span { background: var(--positive); }
+.compact-status.status-started > span, .compact-status.status-progressing > span { background: var(--purple); }
+.compact-status.status-postponed > span { background: var(--caution); }
+.compact-entry-controls { display: flex; flex-wrap: wrap; gap: 0; }
+.compact-actions-trigger, .compact-checklist-toggle { min-width: 44px; min-height: 44px; background: var(--paper); color: var(--ink); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.compact-entry .planned-entry-checklist-row label { flex-wrap: wrap; overflow-wrap: anywhere; }
+.planning-actions-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--ink) 40%, transparent); z-index: 1002; }
+.planning-actions-dialog { background: var(--paper); padding: 16px; border-radius: var(--radius-lg); width: min(440px, 100%); max-height: 90vh; overflow: auto; }
+.planning-actions-dialog > button { margin-bottom: 12px; }
+.planning-undo-stack { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 32px); z-index: 1100; display: grid; gap: 8px; }
+.planning-undo-toast { background: var(--paper); color: var(--ink); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 8px 16px; box-shadow: var(--shadow); overflow-wrap: anywhere; }
+.planning-undo-toast button { min-height: 44px; min-width: 44px; border: 0; background: var(--paper); color: var(--purple); font-weight: 700; }

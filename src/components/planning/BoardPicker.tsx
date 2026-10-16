@@ -41,7 +41,7 @@ function BoardPickerRow({
   onOpenTask,
   enableDrag
 }: BoardPickerRowProps) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, isDragging } = useDraggable({
     id: `picker-task-${task.id}`,
     data: { type: 'picker-task', taskId: task.id, task },
     disabled: !enableDrag
@@ -59,6 +59,7 @@ function BoardPickerRow({
       <div className="board-picker-row-main">
         {enableDrag && (
           <button
+            ref={setActivatorNodeRef}
             type="button"
             className="drag-handle board-picker-drag"
             aria-label={`Drag ${task.title} to day plan`}

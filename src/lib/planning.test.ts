@@ -14,6 +14,7 @@ import {
   moveEntry,
   reorderDay,
   removeEntry,
+  restoreEntry,
   setEntryStatus,
   toggleEntryItem,
   updateEntry,
@@ -566,5 +567,23 @@ describe('src/lib/planning.ts pure planning functions', () => {
       expect(secondIdx).toBeGreaterThan(firstIdx);
       expect(thirdIdx).toBeGreaterThan(secondIdx);
     });
+  });
+});
+
+describe('restoreEntry', () => {
+  it('restores the exact snapshot and unique day orders without changing other days or the source', () => {
+    const { board, task } = createFixtureBoard();
+    let planned = planTask(planTask(planTask(board, task.id, '2026-10-19'), task.id, '2026-10-19'), task.id, '2026-10-20');
+    const entry = entriesForDate(planned, '2026-10-19')[0];
+    planned = toggleEntryItem(planned, entry.id, entry.checklist[0].id);
+    planned = updateEntry(planned, entry.id, { notes: 'Independent notes', title: 'My title', status: 'progressing' });
+    const original = structuredClone(planned.plannedEntries!.find(e => e.id === entry.id)!);
+    const removed = removeEntry(planned, entry.id);
+    const restored = restoreEntry(removed, original);
+    expect(restored.plannedEntries!.find(e => e.id === entry.id)).toEqual(original);
+    expect(entriesForDate(restored, entry.date).map(e => e.order)).toEqual([0, 1]);
+    expect(entriesForDate(restored, '2026-10-20')).toEqual(entriesForDate(planned, '2026-10-20'));
+    expect(restored.tasks).toEqual(board.tasks);
+    expect(restoreEntry(restored, original)).toBe(restored);
   });
 });

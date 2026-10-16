@@ -1,3 +1,4 @@
+import { usePlanRemoval } from './usePlanRemoval';
 import {
   useDroppable,
   DndContext,
@@ -33,12 +34,18 @@ export interface DayPlanProps {
   standalone?: boolean;
   className?: string;
   dayTitle?: string;
+  compact?: boolean;
+  /** Optional immediate removal/restore. Without this, deletion waits through the Undo window. */
+  onRestoreEntry?: (entry: PlannedEntry) => void;
+  /** Allows an external details dialog to use the same removal/Undo action. */
+  onEditEntry?: (entry: PlannedEntry, remove: () => void) => void;
 }
 
 interface SortablePlannedEntryItemProps {
   entry: PlannedEntry;
   index: number;
   totalEntries: number;
+  compact?: boolean;
   sourceTask?: Task;
   onStatusChange?: (entryId: string, status: TaskStatus, postponedTo?: string) => void;
   onToggleChecklistItem?: (entryId: string, itemId: string) => void;
@@ -54,6 +61,7 @@ function SortablePlannedEntryItem({
   entry,
   index,
   totalEntries,
+  compact,
   sourceTask,
   onStatusChange,
   onToggleChecklistItem,
@@ -81,6 +89,7 @@ function SortablePlannedEntryItem({
       className={`sortable-card-wrapper ${isDragging ? 'is-dragging' : ''}`}
     >
       <PlannedEntryCard
+        compact={compact}
         entry={entry}
         sourceTask={sourceTask}
         canMoveUp={index > 0}
@@ -121,15 +130,29 @@ export function DayPlan({
   emptyMessage = 'Nothing planned yet. Add from your board.',
   standalone = false,
   className = '',
-  dayTitle
+  dayTitle,
+  compact = false,
+  onRestoreEntry,
+  onEditEntry
 }: DayPlanProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `day-plan-${date}`,
     data: { type: 'day-plan', date }
   });
 
-  const sortedEntries = sortPlannedEntries(entries);
+  const { visibleEntries, remove } = usePlanRemoval(entries, onRemoveEntry, onRestoreEntry);
+  const sortedEntries = sortPlannedEntries(visibleEntries);
   const taskMap = new Map(tasks.map(t => [t.id, t]));
+  // Legacy callers may defer deletion through the Undo window. Translate visible
+  // positions back to the caller's list, which still includes the pending entry.
+  const reorderVisible = (from: number, to: number) => {
+    const source = sortedEntries[from];
+    const target = sortedEntries[to];
+    if (!source || !target) return;
+    const all = sortPlannedEntries(entries);
+    onReorder?.(date, all.findIndex(e => e.id === source.id), all.findIndex(e => e.id === target.id));
+  };
+
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -142,7 +165,7 @@ export function DayPlan({
       const fromIndex = sortedEntries.findIndex(e => e.id === active.id);
       const toIndex = sortedEntries.findIndex(e => e.id === over.id);
       if (fromIndex !== -1 && toIndex !== -1 && onReorder) {
-        onReorder(date, fromIndex, toIndex);
+        reorderVisible(fromIndex, toIndex);
       }
     }
   };
@@ -173,14 +196,15 @@ export function DayPlan({
                 entry={entry}
                 index={index}
                 totalEntries={sortedEntries.length}
+                compact={compact}
                 sourceTask={taskMap.get(entry.sourceTaskId)}
                 onStatusChange={onStatusChange}
                 onToggleChecklistItem={onToggleChecklistItem}
-                onOpenEdit={onOpenEdit}
-                onRemove={onRemoveEntry}
+                onOpenEdit={entry => onEditEntry ? onEditEntry(entry, () => remove(entry.id)) : onOpenEdit?.(entry)}
+                onRemove={remove}
                 onMoveToDay={onMoveEntry}
-                onMoveUp={() => onReorder?.(date, index, index - 1)}
-                onMoveDown={() => onReorder?.(date, index, index + 1)}
+                onMoveUp={() => reorderVisible(index, index - 1)}
+                onMoveDown={() => reorderVisible(index, index + 1)}
                 onRefreshFromSource={onRefreshFromSource}
               />
             ))}
