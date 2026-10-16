@@ -19,12 +19,25 @@ export class DataErrorBoundary extends Component<Props, State> {
       link.click(); window.setTimeout(()=>URL.revokeObjectURL(url),1000);
     } catch { /* Never overwrite data to recover from a render failure. */ }
   }
+  private resetCorruptBoard() {
+    if (!window.confirm('Start with an empty local board? Your original saved board will first be preserved as a recoverable raw backup.')) return;
+    try {
+      const raw=localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const key=`${STORAGE_KEY}:recovery:${new Date().toISOString()}`;
+      localStorage.setItem(key,raw);
+      if (localStorage.getItem(key)!==raw) throw new Error('Recovery backup was not verified.');
+      localStorage.removeItem(STORAGE_KEY);
+      window.location.reload();
+    } catch { window.alert('Recovery copy could not be safely stored. The original has not been removed. Download it first.'); }
+  }
   render() {
     if (!this.state.failed) return this.props.children;
     return <main className="panel safety-screen" role="alert">
       <h1>Something interrupted your planner</h1>
       <p>No tasks have been deleted. Signed-in boards remain in the account service. Unsynced recovery drafts should be checked after reopening.</p>
       <button type="button" className="button button-secondary" onClick={()=>this.download()}>Download locally saved board, if available</button>
+      <button type="button" className="button button-secondary" onClick={()=>this.resetCorruptBoard()}>Start fresh with safety backup</button>
       <button type="button" className="button button-primary" onClick={()=>window.location.reload()}>Reload planner</button>
     </main>;
   }
