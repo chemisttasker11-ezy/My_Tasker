@@ -268,6 +268,62 @@ def signout(request):
     return JsonResponse({"detail": "Signed out."})
 
 
+@csrf_protect
+@require_POST
+def request_reset(request):
+    """Email one recovery code without revealing whether an account exists."""
+    if not limited_ip(request, "reset-request-ip", 8, 3600):
+        return respond_error("Too many requests. Try again later.", 429)
+    try:
+        email = email_address(payload(request).get("email"))
+    except ValueError as exc:
+        return respond_error(str(exc))
+    if not limit("reset-request-email", email, 4, 3600):
+        return respond_error("Too many requests. Try again later.", 429)
+    user = User.objects.filter(username=email, is_active=True).first()
+    if user:
+        try:
+            with transaction.atomic():
+                earlier = EmailOTP.objects.select_for_update().filter(user=user).first()
+                if earlier and earlier.sent_at > timezone.now() - timedelta(seconds=60):
+                    return respond_error("Please wait before requesting another code.", 429)
+                email_code(user, make_email_code(user, "reset"), "reset")
+        except Exception as exc:
+            logger.warning("Reset mail delivery unavailable (%s).", type(exc).__name__)
+            return respond_error("Unable to send email right now.", 503)
+    return JsonResponse({"detail":"If an account exists, a recovery code has been sent."})
+
+
+@csrf_protect
+@require_POST
+def reset_password(request):
+    if not limited_ip(request, "reset-verify-ip", 20, 900):
+        return respond_error("Too many attempts. Try again later.", 429)
+    try:
+        data = payload(request)
+        email = email_address(data.get("email"))
+        next_password = data.get("password")
+        if not isinstance(next_password,str) or len(next_password)>200:
+            return respond_error("Choose a strong password.")
+        password_validation.validate_password(next_password)
+    except (ValueError, ValidationError) as exc:
+        messages = exc.messages if isinstance(exc,ValidationError) else [str(exc)]
+        return respond_error(" ".join(messages))
+    if not limit("reset-verify-email", email, 10, 900):
+        return respond_error("Too many attempts. Try again later.", 429)
+    with transaction.atomic():
+        user = User.objects.select_for_update().filter(username=email,is_active=True).first()
+        if user is None:
+            return respond_error("Invalid or expired recovery code.")
+        valid, token = checked_code(user, data.get("otp"), "reset")
+        if not valid or token is None:
+            return respond_error("Invalid or expired recovery code.")
+        user.set_password(next_password)
+        user.save(update_fields=["password"])
+        token.delete()
+    return JsonResponse({"detail":"Password updated. Log in with your new password."})
+
+
 @never_cache
 @require_GET
 def me(request):
