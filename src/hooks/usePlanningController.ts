@@ -20,7 +20,7 @@ export function usePlanningController(
     notice(include ? 'Added to weekly commitments' : 'Removed from weekly commitments');
   }
   function chooseDailyFocus(date: string, id: string) {
-    const selected = board.dailyFocus?.[date] ?? [];
+    const selected = (board.dailyFocus?.[date] ?? []).filter(id=>board.tasks.some(t=>t.id===id&&!t.archivedAt) || board.plannedEntries.some(e=>e.id===id&&e.date===date));
     if (!selected.includes(id) && selected.length >= 3) {
       notice('Choose no more than three priorities per day');
       return;
