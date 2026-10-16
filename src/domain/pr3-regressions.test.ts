@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { nextDueDate } from './time';
-import { createTask, initialState } from '../model';
+import { createTask, initialState } from './factory';
 import { saveWeekReview, toggleDailyFocus } from './weekActions';
 
 describe('PR3 selected PR2 regression fixes', () => {
