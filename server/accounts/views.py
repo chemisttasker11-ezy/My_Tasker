@@ -4,6 +4,7 @@ Standalone service: no dependency on ChemistTasker accounts or privileged secret
 Mutations use same-origin CSRF-protected session cookies.
 """
 import hashlib
+import ipaddress
 import json
 import logging
 import re
@@ -22,7 +23,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.middleware.csrf import get_token
-from .models import EmailOTP, RateBucket, UserBoard
+from .models import EmailOTP, RateBucket, UserBoard, UserSessionStamp
 import requests
 
 logger = logging.getLogger(__name__)
@@ -70,9 +71,23 @@ def limit(scope, identifier, maximum, seconds):
     return True
 
 
+def request_ip(request):
+    """Trust X-Real-IP only when REMOTE_ADDR matches a configured reverse proxy."""
+    remote = request.META.get("REMOTE_ADDR", "")
+    try:
+        actual = ipaddress.ip_address(remote)
+        trusted = any(actual in ipaddress.ip_network(cidr, strict=False)
+                      for cidr in settings.TRUSTED_PROXY_CIDRS)
+        if trusted:
+            forwarded = request.META.get("HTTP_X_REAL_IP", "")
+            return str(ipaddress.ip_address(forwarded))
+        return str(actual)
+    except ValueError:
+        return remote or "unknown"
+
+
 def limited_ip(request, action, maximum, seconds):
-    # This value comes from WSGI REMOTE_ADDR, not an attacker-controlled XFF header.
-    return limit(action, request.META.get("REMOTE_ADDR", "unknown"), maximum, seconds)
+    return limit(action, request_ip(request), maximum, seconds)
 
 
 def captcha_valid(token, request):
@@ -257,7 +272,18 @@ def signin(request):
     user = authenticate(request, username=email, password=password)
     if not user or not user.is_active:
         return respond_error("Invalid email, password or unverified account.", 401)
+    if user.is_staff:
+        if not settings.ADMIN_TOTP_ENCRYPTION_KEY:
+            return respond_error("Admin two-factor authentication is not configured.", 503)
+        request.session.flush()
+        request.session["admin_pending_uid"] = user.pk
+        request.session["admin_pending_at"] = timezone.now().timestamp()
+        from .models import AdminSecurity
+        enrolled = AdminSecurity.objects.filter(user=user).exclude(totp_ciphertext="").exists()
+        return JsonResponse({"admin_challenge": True, "enrolled": enrolled}, status=202)
     login(request, user)
+    stamp, _ = UserSessionStamp.objects.get_or_create(user=user)
+    request.session["session_version"] = stamp.version
     return JsonResponse({"user": {"id": user.pk, "email": user.email}})
 
 

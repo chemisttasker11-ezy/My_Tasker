@@ -25,6 +25,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "accounts.middleware.SessionRevocationMiddleware",
 ]
 ROOT_URLCONF = "my_tasker_server.urls"
 TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "DIRS": [],
@@ -92,3 +93,5 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 ADMIN_TOTP_ENCRYPTION_KEY = os.getenv("ADMIN_TOTP_ENCRYPTION_KEY", "")
 if not DEBUG and not ADMIN_TOTP_ENCRYPTION_KEY:
     raise ImproperlyConfigured("Production admin login requires ADMIN_TOTP_ENCRYPTION_KEY.")
+
+TRUSTED_PROXY_CIDRS = [value.strip() for value in os.getenv("TRUSTED_PROXY_CIDRS", "").split(",") if value.strip()]
