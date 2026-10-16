@@ -1,0 +1,23 @@
+/* Crash-safe draft recovery: a high-contrast, single-purpose accessible gate. */
+.draft-recovery-backdrop{position:fixed;inset:0;z-index:500;background:#07204cdb;display:grid;place-items:center;padding:12px;overflow:auto}
+.draft-recovery-dialog{background:#fff;color:#092651;border:3px solid #2c75ef;box-shadow:0 25px 90px #061b3c88;width:min(680px,100%);max-height:calc(100dvh - 24px);overflow-y:auto;border-radius:19px;padding:clamp(16px,4vw,30px);outline:none}
+.draft-recovery-head{display:grid;justify-items:start;gap:8px}
+.draft-recovery-icon{display:grid;place-items:center;width:51px;height:51px;border-radius:13px;background:#0759f5;color:#fff}
+.draft-recovery-eyebrow{font-weight:900;color:#0759f5;letter-spacing:.1em;font-size:11px}
+.draft-recovery-head h2{font:800 clamp(25px,4vw,35px)/1.15 Outfit,sans-serif;letter-spacing:-.02em;margin:0}
+.draft-recovery-head p{font-size:14px;line-height:1.55;color:#2c537d;margin:0}
+.draft-recovery-list{display:grid;gap:12px;margin:23px 0}
+.draft-recovery-item{border:2px solid #90baff;background:#f2f7ff;border-radius:13px;padding:16px}
+.draft-recovery-summary{display:flex;justify-content:space-between;gap:7px;flex-wrap:wrap;align-items:center;font-size:13px}
+.draft-recovery-summary strong{font-weight:900}.draft-recovery-summary span{color:#315683;font-size:12px}
+.draft-recovery-safe,.draft-recovery-conflict{display:flex;align-items:flex-start;gap:7px;padding:10px;border-radius:8px;font-size:12px;font-weight:800;line-height:1.5}
+.draft-recovery-safe{background:#d5ffe7;color:#075b39}.draft-recovery-conflict{background:#ffe9c4;color:#7d330b}
+.draft-recovery-actions{display:flex;gap:8px;flex-wrap:wrap}
+.draft-recovery-actions .button{min-height:44px;display:inline-flex;align-items:center;gap:7px}
+.draft-recovery-actions .button:disabled{opacity:.45;cursor:not-allowed}
+.draft-recovery-delete{color:#bd4114!important;border-color:#ee8b67!important}
+.draft-recovery-footer{border-top:2px solid #d6e6ff;padding-top:14px;display:grid;gap:12px}
+.draft-recovery-footer p{display:flex;align-items:flex-start;gap:7px;color:#315683;font-size:12px;line-height:1.55;margin:0}
+.draft-recovery-footer p>svg{flex:none;color:#0759f5;margin-top:2px}
+.draft-recovery-dialog button:focus-visible{outline:3px solid #f48b1e;outline-offset:3px}
+@media(max-width:460px){.draft-recovery-actions{display:grid}.draft-recovery-actions .button{justify-content:center;width:100%}.draft-recovery-dialog{border-width:2px}}

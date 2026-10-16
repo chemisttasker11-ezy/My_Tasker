@@ -27,6 +27,7 @@ import { relevantTasksForDate } from './lib/planProjection';
 import { CheckCircle2, Quote, X } from 'lucide-react';
 import { WorkspaceChrome } from './components/WorkspaceChrome';
 import { WelcomeGuide } from './components/WelcomeGuide';
+import { DraftRecoveryDialog } from './components/DraftRecoveryDialog';
 import { sampleBoard } from './lib/sampleBoard';
 import type { CloudSnapshot, SignedInUser } from './lib/authApi';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
@@ -38,7 +39,8 @@ interface AppProps {
   onAdminReturn?: () => void;
 }
 export default function App({ account, initialCloud, onSignOut, onAdminReturn }: AppProps = {}) {
-  const { board, setBoard, saveError, cloudFailure, cloudRetrying, retryCloudSync, flushBeforeNavigation, loadLegacyBoard } =
+  const { board, setBoard, saveError, cloudFailure, cloudRetrying, retryCloudSync, flushBeforeNavigation, loadLegacyBoard,
+    recoveryDrafts, serverRevision, restoreDraft, discardDraft, keepServerBoard, downloadDraft, localDraftAvailable } =
     useBoardPersistence(account, initialCloud);
   const guideKey = account ? `mytasker-guide:${account.id}` : '';
   const [guideOpen, setGuideOpen] = useState(() => Boolean(account && !localStorage.getItem(guideKey)));
@@ -80,6 +82,19 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     else showEditor(task);
   }
   function exportData() { downloadable(`my-command-centre-${day}.json`, JSON.stringify(board, null, 2)); alertNotice('Backup downloaded'); }
+  function downloadRecoveredDraft(draftId: string) {
+    const recovered = downloadDraft(draftId);
+    if (!recovered) { alertNotice('This recovery draft was not found.'); return; }
+    downloadable(`mytasker-unsynced-${day}.json`, JSON.stringify(recovered, null, 2));
+    alertNotice('Recovery draft downloaded; it remains on this device until discarded or synced.');
+  }
+  function discardRecoveredDraft(draftId: string) {
+    if (!window.confirm('Delete this unsynced local copy from this browser? Download it first if you need the work.')) return;
+    if (!discardDraft(draftId)) alertNotice('Could not remove this device draft. Browser storage may be unavailable.');
+  }
+  function restoreRecoveredDraft(draftId: string) {
+    if (!restoreDraft(draftId)) alertNotice('The online plan has changed; download your draft for manual reconciliation.');
+  }
   async function importData(file: File | undefined) {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { alertNotice('Backup file is too large (10 MB limit)'); return; }
@@ -133,12 +148,16 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
       onAdminReturn={onAdminReturn?()=>void returnToAdmin():undefined}
       overlays={<>
     <WelcomeGuide open={guideOpen} onClose={closeGuide} onBoard={() => navigate('board')} onWeek={() => navigate('week')}/>
+    <DraftRecoveryDialog drafts={recoveryDrafts} serverRevision={serverRevision}
+      onRestore={restoreRecoveredDraft} onDownload={downloadRecoveredDraft}
+      onDiscard={discardRecoveredDraft} onKeepServer={keepServerBoard}/>
     {editor && <TaskModal key={`${editor.task?.id ?? `new-${editor.lane}`}-${editor.date ?? ''}`} task={editor.task} defaultLane={editor.lane} defaultDate={editor.date ?? ''} effectiveStatus={editor.task ? visibleStatus(editor.task, isCompleted(editor.task, board.completions, day)) : undefined} isCopy={editor.isCopy} onDismiss={() => setEditor(null)} onSave={saveTask}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification"><X size={15}/></button></div>}
       </>}>
         {saveError && <div className="save-warning" role="alert">
           {account ? <>
-            <strong>Changes not synced.</strong> {cloudFailure}. Your edits are still on this page; export a backup before closing it.
+            <strong>Changes not synced.</strong> {cloudFailure}.
+            {localDraftAvailable ? ' A recovery copy is stored in this browser and can be reviewed after signing in again.' : ' Browser recovery is unavailable; keep this page open and export a backup.'}
             <div className="cloud-recovery-actions">
               <button className="button button-secondary" disabled={cloudRetrying} onClick={()=>void retryCloudSyncWithFeedback()}>{cloudRetrying?'Retrying…':'Retry cloud sync'}</button>
               <button className="button button-secondary" onClick={exportData}>Download local backup</button>
