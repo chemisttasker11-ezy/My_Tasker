@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { Archive, CalendarDays, CalendarRange, BarChart3, Check, CheckCircle2, ChevronRight, LayoutDashboard, ListTodo, Menu, Moon, Plus, Settings2, Sparkles, Sun, Target, X } from 'lucide-react';
-import { type BoardState, type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, readState, rescheduleTask, saveTaskChanges, saveWeekReview, setTaskStatus, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
+import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, readState, rescheduleTask, saveTaskChanges, saveWeekReview, setTaskStatus, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
 import { activeItem, downloadable, LANE_LABEL, longToday } from './lib/display';
 import { TaskModal } from './components/TaskModal';
 import { OverviewView } from './views/OverviewView';
@@ -28,7 +29,7 @@ import { projectSchedule, taskForPlanned, relevantTasksForDate } from './lib/pla
 import { Library, Quote, Printer, LogOut, CircleHelp, ShieldCheck } from 'lucide-react';
 import { WelcomeGuide } from './components/WelcomeGuide';
 import { sampleBoard } from './lib/sampleBoard';
-import { saveBoard as saveCloudBoard, loadBoard as loadCloudBoard, type CloudSnapshot, type SignedInUser } from './lib/authApi';
+import type { CloudSnapshot, SignedInUser } from './lib/authApi';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
 
 const ICONS = { overview: LayoutDashboard, board: ListTodo, today: Sun, week: BarChart3, calendar: CalendarRange, upcoming: CalendarDays, goals: Target, completed: CheckCircle2, archived: Archive, settings: Settings2, library: Library, quotes: Quote, tracker: Printer };
@@ -46,15 +47,8 @@ interface AppProps {
   onAdminReturn?: () => void;
 }
 export default function App({ account, initialCloud, onSignOut, onAdminReturn }: AppProps = {}) {
-  const [board, setBoard] = useState<BoardState>(() =>
-    account ? (initialCloud?.board ? validateImported(initialCloud.board) : sampleBoard()) : readState());
-  const lastPersisted = useRef(JSON.stringify(board));
-  const cloudSaved = useRef(JSON.stringify(initialCloud?.board ?? null));
-  const cloudRevision = useRef(initialCloud?.revision ?? 0);
-  const cloudQueue = useRef<Promise<void>>(Promise.resolve());
-  const cloudBlocked = useRef(false);
-  const [cloudFailure, setCloudFailure] = useState('');
-  const [cloudRetrying, setCloudRetrying] = useState(false);
+  const { board, setBoard, saveError, cloudFailure, cloudRetrying, retryCloudSync, flushBeforeNavigation, loadLegacyBoard } =
+    useBoardPersistence(account, initialCloud);
   const guideKey = account ? `mytasker-guide:${account.id}` : '';
   const [guideOpen, setGuideOpen] = useState(() => Boolean(account && !localStorage.getItem(guideKey)));
   const closeGuide = () => { setGuideOpen(false); if (guideKey) localStorage.setItem(guideKey,'seen'); };
@@ -94,44 +88,6 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const currentWeekStart = mondayOf(day);
   const currentWeekScore = useMemo(() => scoreWeek(board.weekPlans?.[currentWeekStart], board, currentWeekStart, day), [board, currentWeekStart, day]);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = board.theme;
-    if (account) return;
-    const encoded = JSON.stringify(board);
-    if (encoded === lastPersisted.current) return;
-    try { localStorage.setItem(STORAGE_KEY, encoded); lastPersisted.current = encoded; setSaveError(false); }
-    catch { setSaveError(true); }
-  }, [board, account]);
-
-  useEffect(() => {
-    if (!account || cloudBlocked.current) return;
-    const snapshot = JSON.stringify(board);
-    if (snapshot === cloudSaved.current) return;
-    const timer = window.setTimeout(() => {
-      cloudQueue.current = cloudQueue.current.then(async () => {
-        if (cloudBlocked.current || cloudSaved.current === snapshot) return;
-        const saved = await saveCloudBoard(JSON.parse(snapshot) as BoardState, cloudRevision.current);
-        cloudRevision.current = saved.revision;
-        cloudSaved.current = snapshot;
-        setSaveError(false);
-      }).catch((error: unknown) => {
-        cloudBlocked.current = true;
-        setCloudFailure(error instanceof Error ? error.message : 'Could not save to your account.');
-        setSaveError(true);
-      });
-    }, 700);
-    return () => window.clearTimeout(timer);
-  }, [board, account]);
-
-  useEffect(() => {
-    if (account) return;
-    const sync = (event: StorageEvent) => {
-      if (event.key !== STORAGE_KEY || !event.newValue) return;
-      try { const incoming = validateImported(JSON.parse(event.newValue)); lastPersisted.current = JSON.stringify(incoming); setBoard(incoming); } catch { /* Keep the current board if another tab wrote invalid data. */ }
-    };
-    window.addEventListener('storage', sync);
-    return () => window.removeEventListener('storage', sync);
-  }, [account]);
   useEffect(() => {
     if (categoryFilter !== 'All' && !board.areas.some(a => a.id === categoryFilter)) setCategoryFilter('All');
   }, [board.areas, categoryFilter]);
@@ -244,56 +200,25 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   }
   async function leaveSafely(afterSave:()=>void|Promise<void>) {
     if (!account) return;
-    await cloudQueue.current;
-    if (cloudBlocked.current) { alertNotice('Cloud save failed. Export a backup before signing out.'); return; }
-    const snapshot = JSON.stringify(board);
-    if (cloudSaved.current !== snapshot) {
-      try {
-        const response = await saveCloudBoard(board, cloudRevision.current);
-        cloudRevision.current = response.revision;
-        cloudSaved.current = snapshot;
-      } catch (error) {
-        cloudBlocked.current = true; setSaveError(true);
-        setCloudFailure(error instanceof Error ? error.message : 'Cloud save could not complete.');
-        return;
-      }
+    if (!await flushBeforeNavigation()) {
+      alertNotice('Cloud save failed. Export a backup before signing out.');
+      return;
     }
     try { await afterSave(); }
     catch (error) { alertNotice(error instanceof Error ? error.message : 'Unable to leave safely.'); }
   }
-  async function retryCloudSync() {
-    if (!account || cloudRetrying) return;
-    setCloudRetrying(true);
-    await cloudQueue.current;
-    try {
-      const remote = await loadCloudBoard();
-      if (remote.revision !== cloudRevision.current) {
-        throw new Error('Another device saved newer changes. Export your current task board before reloading; do not overwrite the other device.');
-      }
-      const saved = await saveCloudBoard(board, cloudRevision.current);
-      cloudSaved.current = JSON.stringify(board);
-      cloudRevision.current = saved.revision;
-      cloudBlocked.current = false;
-      setCloudFailure('');
-      setSaveError(false);
-      alertNotice('Your latest planner changes were saved securely.');
-    } catch (err) {
-      cloudBlocked.current = true;
-      setSaveError(true);
-      setCloudFailure(err instanceof Error ? err.message : 'Cannot reach your account.');
-    } finally {
-      setCloudRetrying(false);
-    }
-  }
   async function signOutSafely() { if (onSignOut) await leaveSafely(onSignOut); }
   async function returnToAdmin() { if (onAdminReturn) await leaveSafely(onAdminReturn); }
+  async function retryCloudSyncWithFeedback() {
+    if (await retryCloudSync()) alertNotice('Your latest planner changes were saved securely.');
+  }
   function importFromThisBrowser() {
-    const legacy = localStorage.getItem(STORAGE_KEY);
-    if (!legacy) { alertNotice('No earlier local task board was found.'); return; }
     try {
-      const restored = validateImported(JSON.parse(legacy));
+      const restored = loadLegacyBoard();
+      if (!restored) { alertNotice('No earlier local task board was found.'); return; }
       if (!window.confirm('Replace your signed-in board with tasks saved in this browser? This will sync them to your account.')) return;
-      setBoard(restored); alertNotice('Imported local tasks into your private account.');
+      setBoard(restored);
+      alertNotice('Imported local tasks into your private account.');
     } catch (error) { alertNotice(error instanceof Error ? error.message : 'Could not read the local board.'); }
   }
   const selectedNav = NAV.find(n => n.id === view);
@@ -329,7 +254,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
           {account ? <>
             <strong>Changes not synced.</strong> {cloudFailure}. Your edits are still on this page; export a backup before closing it.
             <div className="cloud-recovery-actions">
-              <button className="button button-secondary" disabled={cloudRetrying} onClick={()=>void retryCloudSync()}>{cloudRetrying?'Retrying…':'Retry cloud sync'}</button>
+              <button className="button button-secondary" disabled={cloudRetrying} onClick={()=>void retryCloudSyncWithFeedback()}>{cloudRetrying?'Retrying…':'Retry cloud sync'}</button>
               <button className="button button-secondary" onClick={exportData}>Download local backup</button>
             </div>
           </> : 'Browser storage is unavailable or full. Export your work before leaving this page.'}</div>}
