@@ -19,6 +19,11 @@ Enforced by `scripts/check-architecture-boundaries.py` on every PR acceptance ru
 | `src/hooks/useBoardPersistence.ts` | Local-demo storage, cloud revisions and safe save/conflicts | View composition |
 | `src/components/WorkspaceChrome.tsx` | Navigation, responsive shell, topbar | Task or account data writes |
 | `src/views/CalendarView.tsx` | Calendar projections and displayed grid | Modal/header implementation |
+| `src/views/WeekPlannerView.tsx` | Seven-day page coordination, intention and summary | Recurring table, commitment editor, review form |
+| `src/components/weekly/LegacyWeekSchedule.tsx` | Existing due-date series shown in an expandable panel | Day-copy state or cloud storage |
+| `src/components/weekly/WeeklyCommitmentsPanel.tsx` | Weighted commitment list and task candidates | Saving the score |
+| `src/components/weekly/WeeklyReviewPanel.tsx` | Weekly reflection draft, keyed to the chosen week | Global week state |
+| `src/lib/boardSummary.ts` | Pure today/overview projection and actual completion-date counts | React, storage or network |
 | `src/components/calendar/*` | Reusable navigation + day/copy planning dialogs | Date/recurrent task mutations |
 | `src/App.tsx` | Thin orchestrator of pages/handlers | Direct cloud save and schema validation |
 

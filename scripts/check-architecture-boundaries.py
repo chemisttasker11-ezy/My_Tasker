@@ -14,8 +14,13 @@ ERRORS=[]
 # excluded: they are not models/controllers and are not duplicating behaviour.
 LIMITS={
     "src/model.ts": 3000,                           # compatibility exports only
-    "src/App.tsx": 19500,                           # app orchestration, not persistence
+    "src/App.tsx": 16000,                           # now just orchestration; work belongs in hooks/controllers
     "src/views/CalendarView.tsx": 16500,           # shared header/dialogs extracted
+    "src/views/WeekPlannerView.tsx": 9000,         # split week-specific visual panels
+    "src/components/weekly/LegacyWeekSchedule.tsx": 6000,
+    "src/components/weekly/WeeklyCommitmentsPanel.tsx": 6000,
+    "src/components/weekly/WeeklyReviewPanel.tsx": 4000,
+    "src/lib/boardSummary.ts": 4500,                # single pure derived projection
     "server/accounts/views.py": 1300,              # compatibility facade only
     "server/accounts/admin_api.py": 1300,          # compatibility facade only
     "server/accounts/admin_common.py": 3000,
@@ -42,6 +47,24 @@ for location in sorted((ROOT/"src/domain").glob("*.ts")):
         ERRORS.append(f"{location.relative_to(ROOT)} mixes domain state with browser storage.")
     if "fetch(" in content:
         ERRORS.append(f"{location.relative_to(ROOT)} has network I/O in a pure domain module.")
+
+# The historical god stylesheet must remain a checked, import-only facade.
+# Imported fragments retain their original cascade order; all new design rules
+# belong in the relevant component/feature file, never in a rebuilt global blob.
+legacy_css = [
+    "legacy-core-dashboard.css",
+    "legacy-task-board.css",
+    "legacy-forms-views.css",
+    "legacy-responsive-status.css",
+    "legacy-calendar.css",
+]
+expected = "".join(f"@import './styles/{name}';\\n" for name in legacy_css).replace("\\n", "\n")
+style_entry = (ROOT / "src/styles.css").read_text(encoding="utf-8")
+if style_entry != expected:
+    ERRORS.append("src/styles.css is no longer the ordered import-only facade. Use owned CSS modules.")
+for name in legacy_css:
+    if not (ROOT/"src/styles"/name).is_file():
+        ERRORS.append(f"Missing original cascade domain file: {name}")
 
 entry=(ROOT/"src/main.tsx").read_text(encoding="utf-8")
 if "<AuthGate" not in entry or "<App" in entry:
