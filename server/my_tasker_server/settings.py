@@ -87,3 +87,8 @@ if not DEBUG:
 WHITENOISE_ROOT = os.environ.get("FRONTEND_DIST", str(BASE_DIR.parent / "dist"))
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Admin authenticator secrets have their own encryption key; never reuse SECRET_KEY.
+ADMIN_TOTP_ENCRYPTION_KEY = os.getenv("ADMIN_TOTP_ENCRYPTION_KEY", "")
+if not DEBUG and not ADMIN_TOTP_ENCRYPTION_KEY:
+    raise ImproperlyConfigured("Production admin login requires ADMIN_TOTP_ENCRYPTION_KEY.")
