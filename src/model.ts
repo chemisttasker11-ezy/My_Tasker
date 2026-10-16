@@ -450,6 +450,19 @@ export function validISODate(value: unknown): value is string {
 function validTime(value: unknown): value is string {
   return typeof value === 'string' && (value === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(value));
 }
+function candidateAreaNames(...collections: unknown[]): string[] {
+  const names: string[] = [];
+  for (const list of collections) {
+    if (Array.isArray(list)) {
+      for (const item of list) {
+        if (item && typeof item === 'object' && typeof (item as { category?: unknown }).category === 'string') {
+          names.push((item as { category: string }).category);
+        }
+      }
+    }
+  }
+  return names;
+}
 export function validateImported(raw: unknown, warnings: string[] = []): BoardState {
   if (!raw || typeof raw !== 'object') throw new Error('This is not a task backup.');
   const obj = raw as Partial<BoardState>;
@@ -464,16 +477,39 @@ export function validateImported(raw: unknown, warnings: string[] = []): BoardSt
   const areaInput = obj.areas ?? [...CATEGORIES, ...NEUTRAL_AREAS.filter(a => obj.tasks!.some(t => t.category === a.id))];
   if (!Array.isArray(areaInput) || areaInput.length < 1) throw new Error('Backup must contain between 1 and 40 areas.');
   const areaNames = new Set<string>();
-  const areas = trim(areaInput, LIMITS.areas, 'Areas').map(a => {
+  const parsedAreas: Area[] = areaInput.map(a => {
     if (!a || typeof a.id !== 'string' || !a.id.trim() || a.id.length > 40 || a.id.trim().toLowerCase() === 'all' ||
       areaNames.has(a.id.trim().toLowerCase())) throw new Error('Backup contains invalid or duplicate areas.');
     areaNames.add(a.id.trim().toLowerCase());
     return { id: a.id.trim(), emoji: typeof a.emoji === 'string' ? a.emoji.slice(0, 8) : '●',
       tone: ['indigo', 'violet', 'pink', 'orange', 'teal'].includes(a.tone) ? a.tone : 'teal' };
   });
+
+  const existingAreaIds = new Set(parsedAreas.map(a => a.id));
+  const missingAreas: Area[] = [];
+  for (const rawCat of candidateAreaNames(obj.tasks, obj.completions, obj.plannedEntries, (obj as { templates?: unknown }).templates)) {
+    if (rawCat.trim().length > 0 && rawCat.length <= 40 && rawCat.trim().toLowerCase() !== 'all') {
+      const catName = rawCat.trim();
+      if (!existingAreaIds.has(catName)) {
+        existingAreaIds.add(catName);
+        const known = [...CATEGORIES, ...NEUTRAL_AREAS].find(a => a.id === catName);
+        const restoredArea: Area = known ? { ...known } : { id: catName, emoji: '●', tone: 'teal' };
+        missingAreas.push(restoredArea);
+        warnings.push(`Restored missing area: ${catName}`);
+      }
+    }
+  }
+
+  const fullAreas = [...parsedAreas, ...missingAreas];
+  const areas = trim(fullAreas, LIMITS.areas, 'Areas');
   const categories = new Set(areas.map(c => c.id));
-  const removedAreas = new Set(areaInput.slice(LIMITS.areas).map(a => a?.id));
-  const categoryFor = (category: string) => removedAreas.has(category) ? areas[0].id : category;
+  const removedAreas = new Set(fullAreas.slice(LIMITS.areas).map(a => a?.id));
+  const categoryFor = (category: string) => {
+    const trimmed = typeof category === 'string' ? category.trim() : category;
+    if (removedAreas.has(trimmed)) return areas[0].id;
+    if (categories.has(trimmed)) return trimmed;
+    return category;
+  };
   const recurrence = new Set<Recurrence>(['none', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly']);
   const priority = new Set<Priority>(['high', 'medium', 'low']);
   const statuses = new Set<TaskStatus>(['not-started', 'started', 'progressing', 'finished', 'postponed']);

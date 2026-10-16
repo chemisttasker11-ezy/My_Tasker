@@ -77,7 +77,7 @@ function memoryStorage(initial: Record<string, string> = {}): Storage {
 
 describe('TodayView & model loader with Finding 6 & Finding 8 seeds', () => {
   describe('1. Loader round trip (renders nothing)', () => {
-    it('rejects seed when category is missing because createTask defaults to "Me" which is not in CATEGORIES', () => {
+    it('restores missing area with a warning when category is missing from board areas (defaults to "Me")', () => {
       const today = brisbaneToday();
       const board = createTestBoard();
 
@@ -88,7 +88,10 @@ describe('TodayView & model loader with Finding 6 & Finding 8 seeds', () => {
 
       const parsed = JSON.parse(JSON.stringify(updated));
       const warnings: string[] = [];
-      expect(() => validateImported(parsed, warnings)).toThrow('Backup contains invalid tasks.');
+      const loaded = validateImported(parsed, warnings);
+      expect(warnings).toContain('Restored missing area: Me');
+      expect(loaded.areas.some(a => a.id === 'Me')).toBe(true);
+      expect(loaded.tasks.some(t => t.id === 'late-task')).toBe(true);
     });
 
     it('successfully loads Finding 6 seed with valid category through JSON round trip and validateImported', () => {

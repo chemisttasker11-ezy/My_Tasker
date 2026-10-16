@@ -46,7 +46,7 @@ describe('periods and recurring completion', () => {
     const s = initialState();
     expect(validateImported(JSON.parse(JSON.stringify(s))).tasks.length).toBeGreaterThan(20);
     const bad = initialState();
-    bad.tasks[0].category = 'Bad' as never;
+    bad.tasks[0].category = '' as never;
     expect(() => validateImported(bad)).toThrow();
   });
   it('permits independent tasks in all six lanes', () => {
@@ -614,6 +614,157 @@ describe('plannedEntries backward-compatibility, migration and validation', () =
     expect(keptIds).not.toContain('bad-time');
     expect(keptIds).not.toContain('bad-checklist');
     expect(warnings.length).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('repair missing areas instead of rejecting board', () => {
+  it('legacy areas + task in Me loads with Me appended', () => {
+    const storage = memoryStorage();
+    const board = emptyState();
+    board.areas = CATEGORIES.map(a => ({ ...a }));
+    board.tasks = [createTask({ title: 'Task in Me', category: 'Me' })];
+    const raw = JSON.stringify(board);
+    storage.setItem(STORAGE_KEY, raw);
+
+    const loaded = loadBoard(storage);
+    expect(loaded.recovery).toBeUndefined();
+    expect(loaded.warning).toContain('Restored missing area: Me');
+    expect(loaded.board.areas.map(a => a.id)).toEqual([...CATEGORIES.map(a => a.id), 'Me']);
+    expect(loaded.board.tasks[0].category).toBe('Me');
+  });
+
+  it('an import with an unknown area keeps all tasks', () => {
+    const board = emptyState();
+    board.tasks = [
+      createTask({ title: 'Task in unknown area', category: 'Astronomy' }),
+      createTask({ title: 'Task in personal', category: 'Personal' }),
+    ];
+    const warnings: string[] = [];
+    const imported = validateImported(JSON.parse(JSON.stringify(board)), warnings);
+    expect(imported.tasks).toHaveLength(2);
+    expect(imported.tasks[0].title).toBe('Task in unknown area');
+    expect(imported.tasks[0].category).toBe('Astronomy');
+    expect(imported.tasks[1].title).toBe('Task in personal');
+    expect(imported.tasks[1].category).toBe('Personal');
+    expect(imported.areas.map(a => a.id)).toContain('Astronomy');
+    expect(warnings).toContain('Restored missing area: Astronomy');
+  });
+
+  it('the repaired board round-trips with zero warnings', () => {
+    const storage = memoryStorage();
+    const board = emptyState();
+    board.areas = CATEGORIES.map(a => ({ ...a }));
+    board.tasks = [createTask({ title: 'Task in Me', category: 'Me' })];
+    const raw = JSON.stringify(board);
+    storage.setItem(STORAGE_KEY, raw);
+
+    // First load repairs missing area and records a warning
+    const loaded = loadBoard(storage);
+    expect(loaded.board.areas.map(a => a.id)).toContain('Me');
+    expect(loaded.warning).toContain('Restored missing area: Me');
+
+    // Saving the repaired board persists cleanly
+    const saved = writeBoard(raw, loaded.board, storage);
+    expect(saved.warnings).toEqual([]);
+
+    // Stored-board load of the saved board has zero warnings
+    const reloaded = loadBoard(storage);
+    expect(reloaded.warning).toBe('');
+    expect(reloaded.recovery).toBeUndefined();
+    expect(reloaded.board.areas.map(a => a.id)).toContain('Me');
+
+    // Re-validating the reloaded board has zero warnings
+    const revalidatedWarnings: string[] = [];
+    const revalidated = validateImported(JSON.parse(JSON.stringify(reloaded.board)), revalidatedWarnings);
+    expect(revalidatedWarnings).toEqual([]);
+    expect(revalidated.areas.map(a => a.id)).toContain('Me');
+
+    // A later save doesn't create any new recovery copy
+    const recoveryCountBefore = Array.from({ length: storage.length }, (_, i) => storage.key(i)!)
+      .filter(k => k.startsWith(`${STORAGE_KEY}:recovery-`)).length;
+    const laterSave = writeBoard(saved.raw, { ...saved.board, theme: 'dark' }, storage);
+    expect(laterSave.warnings).toEqual([]);
+    const recoveryCountAfter = Array.from({ length: storage.length }, (_, i) => storage.key(i)!)
+      .filter(k => k.startsWith(`${STORAGE_KEY}:recovery-`)).length;
+    expect(recoveryCountAfter).toBe(recoveryCountBefore);
+  });
+
+  it('restores missing area from completions, deduplicating case-sensitively and keeping existing order', () => {
+    const board = emptyState();
+    board.areas = CATEGORIES.map(a => ({ ...a }));
+    const task = createTask({ title: 'Task 1', category: 'NewArea' });
+    board.tasks = [task, createTask({ title: 'Task 2', category: 'NewArea' })];
+    board.completions = [
+      { id: 'c1', taskId: task.id, title: task.title, category: 'NewArea', completedAt: '2026-10-16T01:00:00Z', periodKey: 'once' },
+      { id: 'c2', taskId: task.id, title: task.title, category: 'AnotherArea', completedAt: '2026-10-16T01:00:00Z', periodKey: 'once' }
+    ];
+    const warnings: string[] = [];
+    const imported = validateImported(JSON.parse(JSON.stringify(board)), warnings);
+    expect(imported.tasks).toHaveLength(2);
+    expect(imported.completions).toHaveLength(2);
+    // Preserves existing categories order and appends restored areas
+    expect(imported.areas.map(a => a.id)).toEqual([...CATEGORIES.map(a => a.id), 'NewArea', 'AnotherArea']);
+    // Deduplicated: NewArea warning appears only once despite 2 tasks and 1 completion
+    expect(warnings.filter(w => w === 'Restored missing area: NewArea')).toHaveLength(1);
+    expect(warnings.filter(w => w === 'Restored missing area: AnotherArea')).toHaveLength(1);
+  });
+
+  it('restores missing area from plannedEntries and templates', () => {
+    const board = emptyState();
+    board.areas = CATEGORIES.map(a => ({ ...a }));
+    const raw = {
+      ...board,
+      plannedEntries: [
+        {
+          id: 'p1',
+          sourceTaskId: 't1',
+          date: '2026-10-19',
+          order: 0,
+          status: 'not-started',
+          title: 'Planned task',
+          checklist: [],
+          category: 'PlannedArea'
+        }
+      ],
+      templates: [
+        {
+          id: 'tmpl-1',
+          title: 'Template task',
+          category: 'TemplateArea'
+        }
+      ]
+    };
+    const warnings: string[] = [];
+    const imported = validateImported(raw, warnings);
+    expect(imported.areas.map(a => a.id)).toContain('PlannedArea');
+    expect(imported.areas.map(a => a.id)).toContain('TemplateArea');
+    expect(warnings).toContain('Restored missing area: PlannedArea');
+    expect(warnings).toContain('Restored missing area: TemplateArea');
+  });
+
+  it('rejects truly invalid area/category values (non-string, too long, empty)', () => {
+    const emptyCatBoard = emptyState();
+    emptyCatBoard.tasks = [createTask({ title: 'Empty' })];
+    emptyCatBoard.tasks[0].category = '' as never;
+    expect(() => validateImported(emptyCatBoard)).toThrow('Backup contains invalid tasks.');
+
+    const tooLongCatBoard = emptyState();
+    tooLongCatBoard.tasks = [createTask({ title: 'Too long' })];
+    tooLongCatBoard.tasks[0].category = 'a'.repeat(41) as never;
+    expect(() => validateImported(tooLongCatBoard)).toThrow('Backup contains invalid tasks.');
+
+    const nonStringCatBoard = emptyState();
+    nonStringCatBoard.tasks = [createTask({ title: 'Non-string' })];
+    (nonStringCatBoard.tasks[0] as unknown as Record<string, unknown>).category = 12345;
+    expect(() => validateImported(nonStringCatBoard)).toThrow('Backup contains invalid tasks.');
+
+    const emptyCompBoard = emptyState();
+    emptyCompBoard.completions = [{ id: 'c', taskId: 't', title: 'Done', category: '', completedAt: '2026-10-16T01:00:00Z', periodKey: 'once' }];
+    expect(() => validateImported(emptyCompBoard)).toThrow('Backup contains invalid completion history.');
+
+    const tooLongCompBoard = emptyState();
+    tooLongCompBoard.completions = [{ id: 'c', taskId: 't', title: 'Done', category: 'x'.repeat(41), completedAt: '2026-10-16T01:00:00Z', periodKey: 'once' }];
+    expect(() => validateImported(tooLongCompBoard)).toThrow('Backup contains invalid completion history.');
   });
 });
 
