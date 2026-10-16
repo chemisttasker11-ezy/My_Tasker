@@ -1,12 +1,13 @@
 import { useAreas } from '../lib/areas';
 import type { TrackerLaunch } from './TrackerView';
-import { useMemo, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react';
+import { useCallback, useMemo, useRef, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, FileText, Plus, Search, X } from 'lucide-react';
-import { type BoardState, type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
+import { type BoardState, type Category, type Completion, type Lane, type PlannedEntry, type Task, type TaskStatus } from '../model';
 import { addDays, calendarOccurrences, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
 import { formatDate } from '../lib/display';
 import { CalendarEntry } from '../components/CalendarEntry';
 import { STATUS_LABEL, STATUS_ORDER, visibleStatus } from '../lib/progress';
+import { DayPlanModal } from '../components/planning/DayPlanModal';
 
 const SCALES: { id: CalendarScale; label: string }[] = [
   { id: 'day', label: 'Day' }, { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }, { id: 'year', label: 'Year' }
@@ -27,7 +28,7 @@ interface Props {
 }
 
 /** Task data lives in the domain model. The calendar only renders occurrences. */
-export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, onStatus, onReschedule, onTracker }: Props) {
+export function CalendarView({ board, setBoard, tasks, completions, today, onEdit, onDuplicate, onStatus, onReschedule, onTracker }: Props) {
   const areas = useAreas();
   const [scale, setScale] = useState<CalendarScale>('month');
   const [anchor, setAnchor] = useState(today);
@@ -59,14 +60,95 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
     return { onDragOver: (event: DragEvent<HTMLElement>) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; },
       onDrop: (event: DragEvent<HTMLElement>) => dropTask(event, date) };
   }
-  function openDay(date: string) { setAnchor(date); setScale('day'); }
   const dayEntries = byDay.get(anchor) ?? [];
   const withTime = dayEntries.filter(item => item.task.scheduledTime);
   const anytime = dayEntries.filter(item => !item.task.scheduledTime);
   const otherHours = withTime.filter(item => { const h = Number(item.task.scheduledTime.slice(0, 2)); return h < 6 || h > 22; });
 
+  const [planningDate, setPlanningDate] = useState<string | null>(null);
+  const clickedDayRef = useRef<HTMLElement | null>(null);
+
+  const openPlanModal = useCallback((date: string, element?: HTMLElement) => {
+    let target = element ?? (document.activeElement as HTMLElement) ?? null;
+    if (target && !target.matches('button, a, input, select, textarea, [tabindex]')) {
+      const focusable = target.querySelector<HTMLElement>('.calendar-day-number, .calendar-week-heading button, button');
+      if (focusable) target = focusable;
+    }
+    clickedDayRef.current = target;
+    setPlanningDate(date);
+  }, []);
+
+  const closePlanModal = useCallback(() => {
+    setPlanningDate(null);
+    requestAnimationFrame(() => {
+      clickedDayRef.current?.focus?.();
+    });
+  }, []);
+
+  const plannedByDate = useMemo(() => {
+    const result = new Map<string, PlannedEntry[]>();
+    const entries = board?.plannedEntries ?? [];
+    const taskMap = new Map(tasks.map(t => [t.id, t]));
+    for (const p of entries) {
+      const source = taskMap.get(p.sourceTaskId);
+      if (!source || source.archivedAt) continue;
+      if (category !== 'All' && source.category !== category) continue;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const match = `${p.title} ${p.notes ?? ''} ${source.category}`.toLowerCase().includes(q);
+        if (!match) continue;
+      }
+      result.set(p.date, [...(result.get(p.date) ?? []), p]);
+    }
+    for (const [, list] of result.entries()) {
+      list.sort((a, b) => a.order - b.order || (a.createdAt || '').localeCompare(b.createdAt || ''));
+    }
+    return result;
+  }, [board?.plannedEntries, tasks, category, search]);
+
+  const plannedEntryChip = (p: PlannedEntry, date: string, _compact = false) => (
+    <button
+      type="button"
+      key={`planned-${p.id}`}
+      className={`calendar-chip planned-chip status-${p.status}`}
+      title={`Planned: ${p.title} — ${STATUS_LABEL[p.status]}. Click to plan.`}
+      data-testid={`calendar-planned-${p.id}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        openPlanModal(date, e.currentTarget);
+      }}
+    >
+      <span className={`calendar-status-dot status-${p.status}`} aria-hidden="true" />
+      <span className="calendar-chip-title">{p.title}</span>
+    </button>
+  );
+
   return <>
     <style>{`
+      .planned-chip {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        background: var(--soft-purple, #f4edff);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 11px;
+        color: var(--ink);
+        cursor: pointer;
+        width: 100%;
+        text-align: left;
+        min-height: 24px;
+      }
+      .planned-chip:hover {
+        filter: brightness(0.97);
+      }
+      .planned-chip .calendar-chip-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+      }
       .compact-calendar-toolbar .calendar-toolbar-row {
         display: flex;
         align-items: center;
@@ -240,18 +322,115 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
           </div>)}{otherHours.length > 0 && <div className="calendar-hour"><div className="calendar-hour-label">Other</div><div className="calendar-hour-body">{otherHours.map(item => entry(item))}</div></div>}</div>
         </section>}
         {scale === 'week' && <div className="calendar-week-scroller"><div className="calendar-week" role="grid" aria-label="Weekly calendar">
-          {Array.from({ length: 7 }, (_, i) => addDays(range.start, i)).map(date => <section className={`calendar-week-day ${date === today ? 'is-today' : ''}`} key={date} data-testid={`calendar-date-${date}`} {...dropProps(date)}>
-            <div className="calendar-week-heading"><button onClick={() => openDay(date)}><span>{WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]}</span><strong>{date.slice(-2)}</strong></button><button aria-label={`Add task on ${date}`} onClick={() => addAt(date)}><Plus size={15}/></button></div>
-            <div className="calendar-week-items">{(byDay.get(date) ?? []).map(item => entry(item))}{!(byDay.get(date)?.length) && <p className="calendar-week-empty">Drop a task or add one</p>}</div>
-          </section>)}
+          {Array.from({ length: 7 }, (_, i) => addDays(range.start, i)).map(date => {
+            const tasksOnDate = byDay.get(date) ?? [];
+            const plannedOnDate = plannedByDate.get(date) ?? [];
+            return <section
+              className={`calendar-week-day ${date === today ? 'is-today' : ''}`}
+              key={date}
+              data-testid={`calendar-date-${date}`}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+                const button = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.calendar-week-heading button');
+                openPlanModal(date, button ?? (e.currentTarget as HTMLElement));
+              }}
+              {...dropProps(date)}
+            >
+              <div className="calendar-week-heading">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlanModal(date, e.currentTarget);
+                  }}
+                  title={`Plan ${formatDate(date)}`}
+                  aria-label={`Plan ${date}`}
+                >
+                  <span>{WEEKDAYS[(dateUTC(date).getUTCDay() + 6) % 7]}</span>
+                  <strong>{date.slice(-2)}</strong>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Add task on ${date}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addAt(date);
+                  }}
+                >
+                  <Plus size={15}/>
+                </button>
+              </div>
+              <div className="calendar-week-items">
+                {tasksOnDate.map(item => entry(item))}
+                {plannedOnDate.map(p => plannedEntryChip(p, date))}
+                {!tasksOnDate.length && !plannedOnDate.length && <p className="calendar-week-empty">Drop a task or add one</p>}
+              </div>
+            </section>;
+          })}
         </div></div>}
         {scale === 'month' && <div className="panel calendar-month" role="grid" aria-label="Monthly calendar">
           <div className="calendar-weekdays">{WEEKDAYS.map(day => <span key={day}>{day}</span>)}</div>
           <div className="calendar-month-grid">{monthDates(anchor).map(date => {
             const tasksOnDate = byDay.get(date) ?? [];
-            return <div key={date} className={`calendar-cell ${date.slice(0, 7) !== anchor.slice(0, 7) ? 'outside' : ''} ${date === today ? 'is-today' : ''}`} data-testid={`calendar-date-${date}`} {...dropProps(date)}>
-              <div className="calendar-cell-head"><button className="calendar-day-number" onClick={() => openDay(date)} title={`View ${formatDate(date)}`}>{Number(date.slice(-2))}</button><button className="calendar-cell-add" aria-label={`Add task on ${date}`} title="Add on this date" onClick={() => addAt(date)}><Plus size={15}/></button></div>
-              <div className="calendar-cell-entries">{tasksOnDate.slice(0, 3).map(item => entry(item, true))}{tasksOnDate.length > 3 && <button className="calendar-more" onClick={() => openDay(date)}>+{tasksOnDate.length - 3} more</button>}</div>
+            const plannedOnDate = plannedByDate.get(date) ?? [];
+            const visibleDue = tasksOnDate.slice(0, 3);
+            const visiblePlanned = plannedOnDate.slice(0, 3);
+            const hasMore = tasksOnDate.length > 3 || plannedOnDate.length > 3;
+            const extraCount = Math.max(0, tasksOnDate.length - 3) + Math.max(0, plannedOnDate.length - 3);
+
+            return <div
+              key={date}
+              className={`calendar-cell ${date.slice(0, 7) !== anchor.slice(0, 7) ? 'outside' : ''} ${date === today ? 'is-today' : ''}`}
+              data-testid={`calendar-date-${date}`}
+              onClick={(e) => {
+                if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
+                const button = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.calendar-day-number');
+                openPlanModal(date, button ?? (e.currentTarget as HTMLElement));
+              }}
+              {...dropProps(date)}
+            >
+              <div className="calendar-cell-head">
+                <button
+                  type="button"
+                  className="calendar-day-number"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openPlanModal(date, e.currentTarget);
+                  }}
+                  title={`Plan ${formatDate(date)}`}
+                  aria-label={`Plan ${date}`}
+                >
+                  {Number(date.slice(-2))}
+                </button>
+                <button
+                  type="button"
+                  className="calendar-cell-add"
+                  aria-label={`Add task on ${date}`}
+                  title="Add on this date"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    addAt(date);
+                  }}
+                >
+                  <Plus size={15}/>
+                </button>
+              </div>
+              <div className="calendar-cell-entries">
+                {visibleDue.map(item => entry(item, true))}
+                {visiblePlanned.map(p => plannedEntryChip(p, date, true))}
+                {hasMore && (
+                  <button
+                    type="button"
+                    className="calendar-more"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPlanModal(date, e.currentTarget);
+                    }}
+                  >
+                    +{extraCount} more
+                  </button>
+                )}
+              </div>
             </div>;
           })}</div>
         </div>}
@@ -282,5 +461,14 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
         {unscheduled.length > 35 && <p>{unscheduled.length - 35} more unscheduled tasks. Narrow by area or search to find them.</p>}
       </aside>
     </div>
+    {planningDate && (
+      <DayPlanModal
+        date={planningDate}
+        board={board}
+        setBoard={setBoard}
+        onDismiss={closePlanModal}
+        returnFocusTo={clickedDayRef.current}
+      />
+    )}
   </>;
 }

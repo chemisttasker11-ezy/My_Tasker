@@ -6,6 +6,7 @@ import { addLifeTemplates, LIFE_TEMPLATES, STARTER_IDS } from './lifeLibrary';
 import { changeArea, removeArea } from './areas';
 import { dailyQuote, QUOTE_LIBRARY, quoteSettings, relevantTasksForDate } from './quotes';
 import { trackerData, type TrackerOptions } from './tracker';
+import { planTask, setEntryStatus, toggleEntryItem } from './planning';
 import {
   allocateTrackerSpace,
   buildTrackerDocument,
@@ -360,6 +361,149 @@ describe('tracker PDF generation, omission tracking, and SVG Unicode retention',
     expect(docUnicode.unsupportedChars).toContain('🍏');
     expect(docUnicode.unsupportedChars).toContain('🌟');
     expect(docUnicode.unsupportedChars).toContain('💡');
+  });
+
+  it('projects day, week, month, and year with two copies of one task on different days with different progress', () => {
+    const sourceTask = createTask({
+      id: 'task-source-1',
+      title: 'Prepare quarterly review',
+      dueDate: '2026-10-15',
+      category: 'Home',
+      subtasks: [
+        { id: 'sub-1', title: 'Collect notes', done: false },
+        { id: 'sub-2', title: 'Draft summary', done: false }
+      ]
+    });
+
+    let board = {
+      ...initialState(),
+      tasks: [sourceTask]
+    };
+
+    board = planTask(board, sourceTask.id, '2026-10-15');
+    const entry1 = board.plannedEntries!.find(e => e.date === '2026-10-15')!;
+    board = setEntryStatus(board, entry1.id, 'started');
+    board = toggleEntryItem(board, entry1.id, entry1.checklist[0].id);
+
+    board = planTask(board, sourceTask.id, '2026-10-16');
+    const entry2 = board.plannedEntries!.find(e => e.date === '2026-10-16')!;
+    board = setEntryStatus(board, entry2.id, 'finished');
+    board = toggleEntryItem(board, entry2.id, entry2.checklist[0].id);
+    board = toggleEntryItem(board, entry2.id, entry2.checklist[1].id);
+
+    // Source task is completely unmodified
+    const currentSource = board.tasks.find(t => t.id === sourceTask.id)!;
+    expect(currentSource.status).toBe('not-started');
+    expect(currentSource.subtasks.every(s => !s.done)).toBe(true);
+
+    // Week projection (includes 2026-10-15 and 2026-10-16)
+    const weekOptions: TrackerOptions = {
+      anchor: '2026-10-15',
+      scale: 'week',
+      area: 'All',
+      includeUndated: false,
+      includeChecklist: true,
+      paper: 'a4'
+    };
+    const weekData = trackerData(board, weekOptions);
+
+    // Oct 15: source task (due) + planned copy 1 (dedupe nothing)
+    const oct15Section = weekData.sections.find(s => s.title.includes('15'))!;
+    expect(oct15Section.items).toHaveLength(2);
+
+    const sourceDueItem = oct15Section.items.find(i => !i.key.startsWith('planned-'))!;
+    expect(sourceDueItem.task.id).toBe(sourceTask.id);
+    expect(sourceDueItem.status).toBe('not-started');
+
+    const copy1Item = oct15Section.items.find(i => i.key.startsWith('planned-'))!;
+    expect(copy1Item.label).toContain('planned');
+    expect(copy1Item.status).toBe('started');
+    expect(copy1Item.completed).toBe(false);
+    expect(copy1Item.task.subtasks[0].done).toBe(true);
+    expect(copy1Item.task.subtasks[1].done).toBe(false);
+
+    // Oct 16: planned copy 2
+    const oct16Section = weekData.sections.find(s => s.title.includes('16'))!;
+    expect(oct16Section.items).toHaveLength(1);
+    const copy2Item = oct16Section.items[0];
+    expect(copy2Item.label).toContain('planned');
+    expect(copy2Item.status).toBe('finished');
+    expect(copy2Item.completed).toBe(true);
+    expect(copy2Item.task.subtasks[0].done).toBe(true);
+    expect(copy2Item.task.subtasks[1].done).toBe(true);
+
+    // Day projection on 2026-10-15: source task and copy 1
+    const day1Data = trackerData(board, { ...weekOptions, anchor: '2026-10-15', scale: 'day' });
+    expect(day1Data.sections[0].items).toHaveLength(2);
+    expect(day1Data.sections[0].items.some(i => i.label.includes('planned') && i.status === 'started')).toBe(true);
+
+    // Day projection on 2026-10-16: copy 2
+    const day2Data = trackerData(board, { ...weekOptions, anchor: '2026-10-16', scale: 'day' });
+    expect(day2Data.sections[0].items).toHaveLength(1);
+    expect(day2Data.sections[0].items[0].label).toContain('planned');
+    expect(day2Data.sections[0].items[0].status).toBe('finished');
+
+    // Month projection
+    const monthData = trackerData(board, { ...weekOptions, scale: 'month' });
+    const monthOct15 = monthData.sections.find(s => !s.outside && s.title.includes('15'))!;
+    expect(monthOct15.items).toHaveLength(2);
+    const monthOct16 = monthData.sections.find(s => !s.outside && s.title.includes('16'))!;
+    expect(monthOct16.items).toHaveLength(1);
+
+    // Year projection
+    const yearData = trackerData(board, { ...weekOptions, scale: 'year' });
+    const octSection = yearData.sections[9]; // October (index 9)
+    expect(octSection.items).toHaveLength(3);
+    const plannedYearItems = octSection.items.filter(i => i.key.startsWith('planned-'));
+    expect(plannedYearItems).toHaveLength(2);
+    expect(plannedYearItems[0].status).toBe('started');
+    expect(plannedYearItems[1].status).toBe('finished');
+    expect(plannedYearItems.every(i => i.label.includes('planned'))).toBe(true);
+  });
+
+  it('seeded calendar planning board passes validateImported with no warnings', () => {
+    const board = initialState();
+    board.weeklyScoreEnabled = true;
+    board.onboardingStep = undefined;
+    board.tasks = [
+      createTask({
+        id: 'task-due-today',
+        title: 'File monthly invoice',
+        category: 'Money',
+        lane: 'urgent',
+        dueDate: '2026-10-17',
+        priority: 'high',
+        scheduledTime: '09:00',
+        subtasks: [
+          { id: 'sub-inv-1', title: 'Export line items', done: false },
+          { id: 'sub-inv-2', title: 'Send PDF to client', done: false }
+        ]
+      }),
+      createTask({
+        id: 'task-board-1',
+        title: 'Research planning frameworks',
+        category: 'Me',
+        lane: 'daily',
+        priority: 'medium',
+        subtasks: [
+          { id: 'sub-res-1', title: 'Read ADHD planning guidelines', done: false },
+          { id: 'sub-res-2', title: 'Outline workflow steps', done: false }
+        ]
+      }),
+      createTask({
+        id: 'task-board-2',
+        title: 'Refactor calendar layout',
+        category: 'Work',
+        lane: 'weekly',
+        priority: 'low'
+      })
+    ];
+    const warnings: string[] = [];
+    const validated = validateImported(board, warnings);
+    expect(warnings).toHaveLength(0);
+    expect(validated.tasks).toHaveLength(3);
+    expect(validated.onboardingStep).toBeUndefined();
+    expect(validated.weeklyScoreEnabled).toBe(true);
   });
 });
 
