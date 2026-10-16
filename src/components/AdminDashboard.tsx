@@ -7,7 +7,7 @@ const TABS:{id:Tab;title:string}[]=[
   {id:'overview',title:'Overview'},{id:'users',title:'Users'},{id:'audit',title:'Audit log'},{id:'security',title:'Security health'}
 ];
 export function AdminDashboard({owner,onPersonalPlanner,onSignOut}:{
-  owner:boolean;onPersonalPlanner:()=>void;onSignOut:()=>Promise<void>;
+  owner:boolean;onPersonalPlanner:()=>void|Promise<void>;onSignOut:()=>Promise<void>;
 }){
   const [tab,setTab]=useState<Tab>('overview');
   const [overview,setOverview]=useState<admin.AdminStats|null>(null);
@@ -42,12 +42,20 @@ export function AdminDashboard({owner,onPersonalPlanner,onSignOut}:{
     catch(e){setError(e instanceof Error?e.message:'Action failed.');setBusy(false)}
   }
   function searchUsers(event:FormEvent<HTMLFormElement>){event.preventDefault();setUsersPage(1);setAppliedSearch(search.trim())}
+  const metrics: {label:string;value:number|undefined;Icon:typeof Users}[]=[
+    {label:'Total users',value:overview?.users.total,Icon:Users},
+    {label:'Active',value:overview?.users.active,Icon:UserRoundCheck},
+    {label:'Awaiting email verification',value:overview?.users.pending_verification,Icon:FileClock},
+    {label:'New this week',value:overview?.users.new_last_7_days,Icon:Users},
+    {label:'Administrators',value:overview?.users.admins,Icon:ShieldCheck},
+    {label:'Stored task boards',value:overview?.users.saved_boards,Icon:ClipboardList},
+  ];
   const totalPages=Math.max(1,Math.ceil(usersTotal/20)),totalAuditPages=Math.max(1,Math.ceil(auditTotal/25));
   return <div className="admin-shell">
     <a className="skip-link" href="#admin-main">Skip to administration</a>
     <header className="admin-header">
       <div className="admin-brand"><span><ShieldCheck size={24}/></span><div><strong>mytasker <em>CONTROL</em></strong><small>Protected administration</small></div></div>
-      <div className="admin-header-actions"><span className="admin-mfa-badge"><LockKeyhole size={15}/> MFA verified</span><button className="button button-secondary" onClick={onPersonalPlanner}><ArrowLeft size={17}/> My planner</button><button aria-label="Sign out of admin" className="button button-secondary" onClick={()=>void onSignOut()}><LogOut size={17}/> Sign out</button></div>
+      <div className="admin-header-actions"><span className="admin-mfa-badge"><LockKeyhole size={15}/> MFA verified</span><button className="button button-secondary" onClick={()=>void onPersonalPlanner()}><ArrowLeft size={17}/> My planner</button><button aria-label="Sign out of admin" className="button button-secondary" onClick={()=>void onSignOut()}><LogOut size={17}/> Sign out</button></div>
     </header>
     <div className="admin-layout">
       <nav className="admin-nav" aria-label="Administration">
@@ -59,13 +67,8 @@ export function AdminDashboard({owner,onPersonalPlanner,onSignOut}:{
         {feedback&&<p className="auth-notice" role="status">{feedback}</p>}
         {tab==='overview'&&<div className="admin-overview">
           <div className="admin-stats">
-            {[
-              ['Total users',overview?.users.total,Users],['Active',overview?.users.active,UserRoundCheck],
-              ['Awaiting email verification',overview?.users.pending_verification,FileClock],
-              ['New this week',overview?.users.new_last_7_days,Users],
-              ['Administrators',overview?.users.admins,ShieldCheck],['Stored task boards',overview?.users.saved_boards,ClipboardList]
-            ].map(([label,value,Icon])=><div className="admin-stat" key={label as string}>
-              {typeof Icon!=='string'&&<Icon size={24}/>}<span>{label as string}</span><strong>{value==null?'—':String(value)}</strong></div>)}
+            {metrics.map(({label,value,Icon})=><div className="admin-stat" key={label}>
+              <Icon size={24}/><span>{label}</span><strong>{value==null?'—':String(value)}</strong></div>)}
           </div>
           <section className="panel admin-table-section"><h2>Recent security activity</h2>
             {!overview?.activity.length?<p>No admin actions recorded yet.</p>:

@@ -38,6 +38,7 @@ def user_summary(user):
         "joined": user.date_joined.isoformat(),
         "last_login": user.last_login.isoformat() if user.last_login else None,
         "verified_mfa": AdminSecurity.objects.filter(user=user).exclude(totp_ciphertext="").exists() if user.is_staff else False,
+        "email_verified": VerifiedEmail.objects.filter(user=user).exists(),
         # Task contents never leave the owner's private board endpoint.
     }
 

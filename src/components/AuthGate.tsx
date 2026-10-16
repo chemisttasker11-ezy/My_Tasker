@@ -62,7 +62,13 @@ export function AuthGate() {
     }
   }}/>;
   if(adminStage==='ready'&&adminPortal)return <AdminDashboard owner={adminOwner}
-    onPersonalPlanner={()=>setAdminPortal(false)} onSignOut={signOut}/>;
+    onPersonalPlanner={async()=>{
+      try {
+        const data=await api.loadBoard();
+        setSession(current=>current?{...current,data}:current);
+        setAdminPortal(false);
+      }catch(e){setError(e instanceof Error?e.message:'Unable to load your private planner');}
+    }} onSignOut={signOut}/>;
   return <App key={session.user.id} account={session.user} initialCloud={session.data}
     onSignOut={signOut} onAdminReturn={adminStage==='ready'?()=>setAdminPortal(true):undefined}/>;
 }

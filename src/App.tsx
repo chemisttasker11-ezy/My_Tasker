@@ -25,7 +25,7 @@ import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
 import { dailyQuote, quoteSettings } from './lib/quotes';
 import { relevantTasksForDate } from './lib/planProjection';
-import { Library, Quote, Printer, LogOut, CircleHelp } from 'lucide-react';
+import { Library, Quote, Printer, LogOut, CircleHelp, ShieldCheck } from 'lucide-react';
 import { WelcomeGuide } from './components/WelcomeGuide';
 import { sampleBoard } from './lib/sampleBoard';
 import { saveBoard as saveCloudBoard, type CloudSnapshot, type SignedInUser } from './lib/authApi';
@@ -43,8 +43,9 @@ interface AppProps {
   account?: SignedInUser;
   initialCloud?: CloudSnapshot;
   onSignOut?: () => Promise<void>;
+  onAdminReturn?: () => void;
 }
-export default function App({ account, initialCloud, onSignOut }: AppProps = {}) {
+export default function App({ account, initialCloud, onSignOut, onAdminReturn }: AppProps = {}) {
   const [board, setBoard] = useState<BoardState>(() =>
     account ? (initialCloud?.board ? validateImported(initialCloud.board) : sampleBoard()) : readState());
   const lastPersisted = useRef(JSON.stringify(board));
@@ -223,8 +224,8 @@ export default function App({ account, initialCloud, onSignOut }: AppProps = {})
     setBoard(account ? sampleBoard() : initialState());
     navigate('overview'); alertNotice('Starter tasks restored');
   }
-  async function signOutSafely() {
-    if (!account || !onSignOut) return;
+  async function leaveSafely(afterSave:()=>void|Promise<void>) {
+    if (!account) return;
     await cloudQueue.current;
     if (cloudBlocked.current) { alertNotice('Cloud save failed. Export a backup before signing out.'); return; }
     const snapshot = JSON.stringify(board);
@@ -239,9 +240,11 @@ export default function App({ account, initialCloud, onSignOut }: AppProps = {})
         return;
       }
     }
-    try { await onSignOut(); }
-    catch (error) { alertNotice(error instanceof Error ? error.message : 'Logout failed.'); }
+    try { await afterSave(); }
+    catch (error) { alertNotice(error instanceof Error ? error.message : 'Unable to leave safely.'); }
   }
+  async function signOutSafely() { if (onSignOut) await leaveSafely(onSignOut); }
+  async function returnToAdmin() { if (onAdminReturn) await leaveSafely(onAdminReturn); }
   function importFromThisBrowser() {
     const legacy = localStorage.getItem(STORAGE_KEY);
     if (!legacy) { alertNotice('No earlier local task board was found.'); return; }
@@ -277,7 +280,7 @@ export default function App({ account, initialCloud, onSignOut }: AppProps = {})
     </aside>
     {mobileNav && <button className="mobile-backdrop" onClick={() => setMobileNav(false)} aria-label="Close navigation"/>}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right">{account && <button type="button" className="icon-button auth-help-top" aria-label="Show getting started guide" onClick={() => setGuideOpen(true)}><CircleHelp size={19}/></button>}<span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button>
+      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right">{account && onAdminReturn && <button type="button" className="icon-button" aria-label="Return to secured admin" title="Admin dashboard" onClick={()=>void returnToAdmin()}><ShieldCheck size={19}/></button>}{account && <button type="button" className="icon-button auth-help-top" aria-label="Show getting started guide" onClick={() => setGuideOpen(true)}><CircleHelp size={19}/></button>}<span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button>
         {account && <button className="icon-button auth-logout-top" type="button" aria-label="Save and sign out" onClick={() => void signOutSafely()}><LogOut size={20}/></button>}</div></header>
       <main className="content" id="main-content" tabIndex={-1}>
         {saveError && <div className="save-warning" role="alert">{account ? `Your cloud changes could not be saved: ${cloudFailure}. Export a backup from Settings before leaving or reloading this page.` : 'Browser storage is unavailable or full. Export your work before leaving this page.'}</div>}
