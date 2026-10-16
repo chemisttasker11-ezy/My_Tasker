@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace';
-import { ArrowRight, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, ClipboardList, Flag, Plus, Target, TrendingUp } from 'lucide-react';
+import { ArrowRight, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, ClipboardList, Target } from 'lucide-react';
 import { type BoardState, type Lane, type Task, type View, type WeekReview } from '../model';
 import { addDays, calendarOccurrences, dateTitle, mondayOf } from '../lib/calendar';
-import { formatDate } from '../lib/display';
-import { STATUS_LABEL, visibleStatus } from '../lib/progress';
-import { PRIORITY_WEIGHTS, scoreWeek, STATUS_POINTS } from '../lib/scoring';
+import { scoreWeek } from '../lib/scoring';
+import { LegacyWeekSchedule } from '../components/weekly/LegacyWeekSchedule';
+import { WeeklyCommitmentsPanel } from '../components/weekly/WeeklyCommitmentsPanel';
+import { WeeklyReviewPanel } from '../components/weekly/WeeklyReviewPanel';
 import { WeeklyScoreMeter } from '../components/WeeklyScoreMeter';
 
 type ReviewNotes = Pick<WeekReview, 'wins' | 'blockers' | 'adjustment'>;
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 interface Props {
   planActions: PlanningActions;
@@ -35,25 +35,10 @@ export function WeekPlannerView({ board, planActions, onCapacity, today, navigat
   useEffect(() => { setCapacity(String(board.weekPlans[weekStart]?.capacityHours ?? '')); setIntention(board.weekPlans[weekStart]?.intention ?? ''); }, [weekStart]);
   const summary = useMemo(() => scoreWeek(plan, board, weekStart, today), [plan, board, weekStart, today]);
   const shownPercent = isPastWeek && plan?.review?.savedAt ? plan.review.scoreSnapshot : summary.percent;
-  const [notes, setNotes] = useState<ReviewNotes>({ wins: '', blockers: '', adjustment: '' });
-  useEffect(() => {
-    setNotes({
-      wins: board.weekPlans?.[weekStart]?.review?.wins ?? '',
-      blockers: board.weekPlans?.[weekStart]?.review?.blockers ?? '',
-      adjustment: board.weekPlans?.[weekStart]?.review?.adjustment ?? ''
-    });
-  // Deliberately reset the draft only when changing weeks, not on every status update.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart]);
   const scheduled = useMemo(
     () => calendarOccurrences(board.tasks, board.completions, weekStart, weekEnd),
     [board.tasks, board.completions, weekStart, weekEnd]
   );
-  const byDay = useMemo(() => {
-    const grouped = new Map<string, typeof scheduled>();
-    for (const item of scheduled) grouped.set(item.date, [...(grouped.get(item.date) ?? []), item]);
-    return grouped;
-  }, [scheduled]);
   const plannedIds = new Set(plan?.commitments.map(item => item.taskId) ?? []);
   const candidates = [...new Map(scheduled.filter(item => !plannedIds.has(item.task.id)).map(item => [item.task.id, item.task])).values()];
   const backlog = board.tasks.filter(task => !task.archivedAt && !task.dueDate &&
@@ -100,81 +85,13 @@ export function WeekPlannerView({ board, planActions, onCapacity, today, navigat
       {Number(capacity)>0&&<p className="week-capacity-summary">Estimated planned time: {(board.plannedEntries.filter(e=>e.date>=weekStart&&e.date<=weekEnd).reduce((sum,e)=>sum+e.estimateMinutes,0)/60).toFixed(1)} / {capacity} hours</p>}
     </section>
     <PlanWorkspace board={board} dates={days} actions={planActions} title="Build your seven-day plan"/>
-    <section className="week-days-section week-legacy-projection" aria-label="Existing recurring appointments">
-      <details><summary>View recurring tasks and previous due-date schedule</summary>
-      <div className="week-section-title"><h2>Seven days, one clear plan</h2><p>Choose up to three priorities for each day. Open any task to edit it, or use Calendar to move its date.</p></div>
-      <div className="week-days-grid">
-        {days.map((date, index) => {
-          const focusIds = board.dailyFocus?.[date] ?? [];
-          const events = byDay.get(date) ?? [];
-          return <section key={date} className={`week-day ${date === today ? 'is-today' : ''}`} aria-label={`${DAYS[index]}, ${formatDate(date)}`}>
-            <div className="week-day-head">
-              <span>{DAYS[index].slice(0, 3)}</span><strong>{Number(date.slice(-2))}</strong>
-              <button type="button" aria-label={`Add task on ${formatDate(date)}`} title="Add task" onClick={() => onEdit(null, 'daily', date)}><Plus size={17}/></button>
-            </div>
-            <div className="week-day-focus"><Target size={14}/><span>{focusIds.length}/3 focused</span></div>
-            <div className="week-day-events">
-              {events.length ? events.map(item => {
-                const status = visibleStatus(item.task, item.completed);
-                const pinned = focusIds.includes(item.task.id);
-                return <article className={`week-task status-${status}`} key={`${item.task.id}-${item.date}`}>
-                  <button type="button" className="week-task-title" onClick={() => onEdit(item.task)}>
-                    <strong>{item.task.title}</strong>
-                    <small>{item.task.scheduledTime ? `${item.task.scheduledTime} · ` : ''}{STATUS_LABEL[status]} · {STATUS_POINTS[status]} pts</small>
-                  </button>
-                  <div className="week-task-controls">
-                    <button type="button" className={`week-focus-toggle ${pinned ? 'is-selected' : ''}`}
-                      aria-pressed={pinned} aria-label={`${pinned ? 'Remove' : 'Select'} ${item.task.title} ${pinned ? 'from' : 'for'} top three on ${formatDate(date)}`}
-                      disabled={!pinned && focusIds.length >= 3}
-                      onClick={() => onFocus(date, item.task.id)}><Target size={15}/></button>
-                    <button type="button" className={`week-commit-toggle ${plannedIds.has(item.task.id) ? 'is-selected' : ''}`}
-                      aria-pressed={plannedIds.has(item.task.id)}
-                      onClick={() => onInclude(weekStart, item.task.id, !plannedIds.has(item.task.id))}>
-                      {plannedIds.has(item.task.id) ? 'Planned' : '+ Plan'}
-                    </button>
-                  </div>
-                </article>;
-              }) : <p className="week-day-empty">Space for what matters.</p>}
-            </div>
-          </section>;
-        })}
-      </div>
-      </details>
-    </section>
+    <LegacyWeekSchedule board={board} days={days} scheduled={scheduled} today={today}
+      plannedIds={plannedIds} weekStart={weekStart} onEdit={onEdit} onFocus={onFocus} onInclude={onInclude}/>
     <div className="week-bottom-grid">
-      <section className="panel week-commitments" aria-label="Committed tasks">
-        <header className="week-panel-head"><div><h2>My commitments</h2><p>{summary.planned} selected · Postponed work still counts in this week's score.</p></div><Flag size={19}/></header>
-        {summary.items.length ? <div className="week-commit-list">{summary.items.map(item => <div className="week-commit-row" key={item.commitment.taskId}>
-          <span className={`week-status-mark status-${item.status}`} aria-hidden="true"><Circle size={12}/></span>
-          <div className="week-commit-details">
-            <strong>{item.commitment.title}</strong>
-            <span>{STATUS_LABEL[item.status]} · {item.points} pts · {PRIORITY_WEIGHTS[item.commitment.priority]}× weight{item.commitment.plannedDate ? ` · Planned ${formatDate(item.commitment.plannedDate)}` : ''}</span>
-            {item.task && item.commitment.plannedDate && item.task.dueDate !== item.commitment.plannedDate && <small>Now scheduled {item.task.dueDate ? formatDate(item.task.dueDate) : 'without a date'} — still in this plan.</small>}
-          </div>
-          <strong className="week-earned-points">{item.earned}/{item.possible}</strong>
-          {item.task && <button type="button" className="week-remove" onClick={() => onInclude(weekStart, item.commitment.taskId, false)} aria-label={`Remove ${item.commitment.title} from weekly plan`}>Remove</button>}
-        </div>)}</div> : <div className="week-empty-commit"><ClipboardList size={26}/><h3>Your plan starts here</h3><p>Scheduled tasks appear below. Add only what you realistically expect to finish.</p></div>}
-        <div className="week-pick-list"><h3>Available this week</h3>
-          {candidates.slice(0, 12).map(task => <div className="week-pick-row" key={task.id}><span>{task.title}</span><button type="button" onClick={() => onInclude(weekStart, task.id, true)}>Add to plan</button></div>)}
-          {!candidates.length && <p className="week-muted">No unplanned scheduled tasks. Use Calendar to schedule more.</p>}
-        </div>
-        {backlog.length > 0 && <div className="week-pick-list week-backlog"><h3>From your unscheduled board</h3>
-          {backlog.map(task => <div className="week-pick-row" key={task.id}><span>{task.title}</span><button type="button" onClick={() => onEdit(task, task.lane, weekStart)}>Schedule</button></div>)}
-        </div>}
-      </section>
-
-      <section className="panel week-review" aria-label="Weekly review">
-        <header className="week-panel-head"><div><h2>Close the loop</h2><p>A short review makes your next plan more realistic.</p></div><TrendingUp size={20}/></header>
-        <form onSubmit={event => { event.preventDefault(); if (summary.planned) onReview(weekStart, notes); }}>
-          <label>What went well?<textarea maxLength={1400} rows={3} value={notes.wins} onChange={event => setNotes(s => ({ ...s, wins: event.target.value }))} placeholder="A few wins worth repeating…"/></label>
-          <label>What got in the way?<textarea maxLength={1400} rows={3} value={notes.blockers} onChange={event => setNotes(s => ({ ...s, blockers: event.target.value }))} placeholder="Limited time, waiting for a reply…"/></label>
-          <label>What will you adjust next week?<textarea maxLength={1400} rows={3} value={notes.adjustment} onChange={event => setNotes(s => ({ ...s, adjustment: event.target.value }))} placeholder="One practical change…"/></label>
-          <button className="button button-primary" type="submit" disabled={!summary.planned}>Save weekly review</button>
-          <p className="week-review-footnote">{plan?.review?.savedAt ? 'Review saved. Past weeks show the score captured when you last saved it.' : 'Saving records the current score for future reference.'}</p>
-        </form>
-      </section>
+      <WeeklyCommitmentsPanel summary={summary} plannedIds={plannedIds} candidates={candidates}
+        backlog={backlog} weekStart={weekStart} onInclude={onInclude} onEdit={onEdit}/>
+      <WeeklyReviewPanel key={weekStart} plan={plan} planned={summary.planned} weekStart={weekStart} onReview={onReview}/>
     </div>
-
     <details className="week-scoring-guide panel">
       <summary>How the score works <ChevronRight size={17}/></summary>
       <p>Your weekly score is the weighted average of the status scores for tasks you deliberately committed to. High priority counts 3×, medium 2× and low 1×. Moving or postponing a task does not remove it automatically.</p>
