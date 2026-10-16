@@ -112,8 +112,17 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     if (file.size > 10 * 1024 * 1024) { alertNotice('Backup file is too large (10 MB limit)'); return; }
     try {
       const incoming = validateImported(JSON.parse(await file.text()));
-      if (!window.confirm('Replace all current tasks with this backup? Export a backup first if you want to keep what you have.')) return;
-      setBoard(incoming); alertNotice('Backup restored');
+      if (!window.confirm(`Import ${incoming.tasks.length} tasks, ${incoming.areas.length} areas, ${incoming.completions.length} history entries and ${incoming.plannedEntries.length} planned copies? This replaces the current board and saves a local recovery backup first.`)) return;
+      // An import must never silently destroy the current cloud or local board.
+      // Account scope prevents different signed-in users from sharing backup keys.
+      try {
+        const key = `mytasker:before-import:${account?.id ?? 'local'}:${new Date().toISOString()}`;
+        localStorage.setItem(key, JSON.stringify(board));
+      } catch {
+        alertNotice('A safety backup could not be stored in this browser. Import cancelled; export the current board first.');
+        return;
+      }
+      setBoard(incoming); alertNotice('Backup restored. Your previous plan remains available in this browser as a recovery copy.');
     } catch (err) { alertNotice(err instanceof Error ? err.message : 'Could not import backup'); }
     finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
   }
