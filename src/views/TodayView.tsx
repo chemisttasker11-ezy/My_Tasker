@@ -1,11 +1,13 @@
 import { Activity, ArrowRight, Check, CheckCircle2, ChevronRight, Circle, Plus, Target } from 'lucide-react';
-import { type Lane, type Task, type View } from '../model';
+import { type BoardState, type Lane, type Task, type View } from '../model';
+import type { Dispatch, SetStateAction } from 'react';
 import { formatDate, LANE_LABEL, longToday } from '../lib/display';
 import { EmptyState } from '../components/EmptyState';
 import { STATUS_LABEL, visibleStatus } from '../lib/progress';
 import { STATUS_POINTS } from '../lib/scoring';
 
 interface Props {
+  board: BoardState; setBoard: Dispatch<SetStateAction<BoardState>>;
   scoreEnabled: boolean; todayTasks: Task[]; doneToday: number; day: string; allTasks: Task[];
   focusIds: string[]; completed: (task: Task) => boolean;
   onFocus: (date: string, id: string) => void;

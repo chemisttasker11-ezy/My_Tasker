@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Circle, ClipboardList, Flag, Plus, Target, TrendingUp } from 'lucide-react';
 import { type BoardState, type Lane, type Task, type View, type WeekReview } from '../model';
 import { addDays, calendarOccurrences, dateTitle, mondayOf } from '../lib/calendar';
@@ -11,7 +11,7 @@ type ReviewNotes = Pick<WeekReview, 'wins' | 'blockers' | 'adjustment'>;
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 interface Props {
-  board: BoardState;
+  board: BoardState; setBoard: Dispatch<SetStateAction<BoardState>>;
   today: string;
   navigate: (view: View) => void;
   onEdit: (task: Task | null, lane?: Lane, defaultDate?: string) => void;

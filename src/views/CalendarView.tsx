@@ -1,8 +1,8 @@
 import { useAreas } from '../lib/areas';
 import type { TrackerLaunch } from './TrackerView';
-import { useMemo, useState, type DragEvent } from 'react';
+import { useMemo, useState, type Dispatch, type DragEvent, type SetStateAction } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, FileText, Plus, Search, X } from 'lucide-react';
-import { type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
+import { type BoardState, type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
 import { addDays, calendarOccurrences, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
 import { formatDate } from '../lib/display';
 import { CalendarEntry } from '../components/CalendarEntry';
@@ -15,6 +15,7 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
 
 interface Props {
+  board: BoardState; setBoard: Dispatch<SetStateAction<BoardState>>;
   onTracker: (launch: TrackerLaunch) => void;
   tasks: Task[];
   completions: Completion[];
