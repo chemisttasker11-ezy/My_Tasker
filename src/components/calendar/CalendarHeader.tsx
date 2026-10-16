@@ -6,12 +6,12 @@ const SCALES: {id:CalendarScale;label:string}[] = [
   {id:'month',label:'Month'},{id:'year',label:'Year'}
 ];
 interface Props {
-  anchor:string;scale:CalendarScale;today:string;
+  anchor:string;scale:CalendarScale;
   onOpenDay:(date:string)=>void;onOpenTracker:()=>void;onCopyDays:()=>void;
   onShift:(direction:number)=>void;onToday:()=>void;onScale:(next:CalendarScale)=>void;
 }
 /** Calendar navigation/header owns presentation, not recurrence or mutation rules. */
-export function CalendarHeader({anchor,scale,today,onOpenDay,onOpenTracker,onCopyDays,onShift,onToday,onScale}:Props){
+export function CalendarHeader({anchor,scale,onOpenDay,onOpenTracker,onCopyDays,onShift,onToday,onScale}:Props){
   return <>
     <div className="page-title-row calendar-page-title"><div><span className="eyebrow">MAKE TIME FOR WHAT MATTERS</span><h1>Calendar <span className="heading-sparkle">✳</span></h1><p>Tap a day to open its planner, add board tasks, rearrange independent copies and copy/paste plans.</p></div><button className="button button-primary" onClick={() => onOpenDay(anchor)}><Plus size={17}/> Plan {formatDate(anchor)}</button></div>
     <section className="calendar-toolbar panel" aria-label="Calendar controls">

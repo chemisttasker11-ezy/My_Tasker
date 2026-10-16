@@ -1,7 +1,7 @@
 import { useAreas } from '../lib/areas';
 import type { TrackerLaunch } from './TrackerView';
 import { useMemo, useState, type DragEvent } from 'react';
-import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace';
+import type { PlanningActions } from '../components/PlanWorkspace';
 import type { BoardState } from '../model';
 import { CalendarDays, Plus, Search, X } from 'lucide-react';
 import { CalendarHeader } from '../components/calendar/CalendarHeader';
@@ -79,7 +79,7 @@ export function CalendarView({ board, planActions, tasks, today, onEdit, onDupli
       onCloseSelection={()=>setSelectionOpen(false)} onCloseDay={()=>setPlanningDay(null)}
       onSetExtraDate={setExtraDate} onIncludeDate={date=>setSelectedDates(s=>[...s,date].sort())}
       onRemoveDate={date=>setSelectedDates(s=>s.filter(d=>d!==date))}/>
-    <CalendarHeader anchor={anchor} scale={scale} today={today} onOpenDay={openDay}
+    <CalendarHeader anchor={anchor} scale={scale} onOpenDay={openDay}
       onOpenTracker={()=>onTracker({anchor,scale,area:category})}
       onCopyDays={()=>{setSelectedDates([anchor]);setExtraDate(anchor);setSelectionOpen(true);}}
       onShift={direction=>setAnchor(value=>shiftCalendar(value,scale,direction))}
