@@ -9,8 +9,25 @@ export function validateImported(raw: unknown): BoardState {
     throw new Error('Unsupported or invalid task backup.');
   }
   const lanes = new Set(LANES.map(l => l.id));
-  const areaInput = obj.areas ?? CATEGORIES;
-  if (!Array.isArray(areaInput) || areaInput.length < 1 || areaInput.length > 40) throw new Error('Backup must contain between 1 and 40 areas.');
+  // Restore missing area definitions when older backups still reference them.
+  // Never rename or remap a user's category, or silently drop a referenced area.
+  const suppliedAreas = obj.areas ?? CATEGORIES;
+  if (!Array.isArray(suppliedAreas)) throw new Error('Invalid areas in backup.');
+  const areaInput = [...suppliedAreas];
+  const existing = new Set(areaInput.map(a => typeof a?.id === 'string' ? a.id.toLowerCase() : ''));
+  const references = [obj.tasks, obj.completions, obj.plannedEntries];
+  for (const collection of references) {
+    if (!Array.isArray(collection)) continue;
+    for (const row of collection) {
+      const category = row && typeof row === 'object' && 'category' in row ? row.category : undefined;
+      if (typeof category !== 'string' || !category.trim() || category.length > 40 || category.trim().toLowerCase() === 'all') continue;
+      if (!existing.has(category.toLowerCase())) {
+        existing.add(category.toLowerCase());
+        areaInput.push({ id:category, emoji:'●', tone:'teal' });
+      }
+    }
+  }
+  if (areaInput.length < 1 || areaInput.length > 40) throw new Error('Backup must contain between 1 and 40 areas.');
   const areaNames = new Set<string>();
   const areas = areaInput.map(a => {
     if (!a || typeof a.id !== 'string' || !a.id.trim() || a.id.length > 40 || a.id.trim().toLowerCase() === 'all' ||
@@ -37,11 +54,13 @@ export function validateImported(raw: unknown): BoardState {
       throw new Error('Backup contains invalid tasks.');
     }
     ids.add(t.id);
+    const seenSubtasks = new Set<string>();
     const subtasks = t.subtasks.map(s => {
-      if (!s || typeof s.id !== 'string' || typeof s.title !== 'string' || s.title.length > 250 || typeof s.done !== 'boolean') {
+      if (!s || typeof s.id !== 'string' || !s.id || s.id.length > 100 || seenSubtasks.has(s.id) || typeof s.title !== 'string' || !s.title.trim() || s.title.length > 250 || typeof s.done !== 'boolean') {
         throw new Error('Backup contains invalid checklist items.');
       }
-      return { id: s.id.slice(0, 100), title: s.title, done: s.done };
+      seenSubtasks.add(s.id);
+      return { id: s.id, title: s.title, done: s.done };
     });
     return {
       ...t, subtasks,

@@ -7,6 +7,13 @@ const day = '2026-10-16';
 const now = new Date('2026-10-16T08:30:00.000Z');
 
 describe('board summary: planned copies and actual completion date', () => {
+  it('makes a postponed task visible when its postponed date is reached', () => {
+    const task = createTask({ title:'Due again', lane:'urgent', status:'postponed', dueDate:day });
+    const summary = projectBoardSummary({ ...initialState(),tasks:[task] },day);
+    expect(summary.todayTasks.map(item=>item.id)).toContain(task.id);
+    const futureTask = { ...task,dueDate:'2026-10-20' };
+    expect(projectBoardSummary({...initialState(),tasks:[futureTask]},day).todayTasks).toHaveLength(0);
+  });
   it('counts planned copies without duplicating their reusable board source', () => {
     const source = createTask({ title:'Clinical review', lane:'daily', dueDate:day });
     const baseline = { ...initialState(), tasks:[source] };

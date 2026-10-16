@@ -7,6 +7,7 @@ import '@fontsource/outfit/700.css';
 import '@fontsource/outfit/800.css';
 import ReactDOM from 'react-dom/client';
 import { AuthGate } from './components/AuthGate';
+import { DataErrorBoundary } from './components/DataErrorBoundary';
 import './styles.css';
 import './styles/foundations.css';
 import './styles/weekly.css';
@@ -16,9 +17,10 @@ import './styles/energetic-pro.css';
 import './styles/auth-admin.css';
 import './styles/draft-recovery.css';
 import './styles/sync-recovery.css';
+import './styles/calendar-compact.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthGate />
+    <DataErrorBoundary><AuthGate /></DataErrorBoundary>
   </React.StrictMode>
 );

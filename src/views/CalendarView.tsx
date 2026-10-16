@@ -24,7 +24,7 @@ interface Props {
   today: string;
   onEdit: (task: Task | null, lane?: Lane, defaultDate?: string) => void;
   onDuplicate: (task: Task) => void;
-  onStatus: (id: string, status: TaskStatus, postponedTo?: string) => void;
+  onStatus: (id: string, status: TaskStatus, postponedTo?: string, occurrenceDate?: string) => void;
   onReschedule: (id: string, date: string) => void;
 }
 

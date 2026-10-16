@@ -33,7 +33,19 @@ export function nextDueDate(date: string, recurrence: Recurrence, today: string)
   let cursor = anchor;
   const target = today;
   // Preserve calendar anchor on monthly schedules (31st becomes month-end when shorter).
-  for (let n = 1; n < 5000 && cursor.toISOString().slice(0, 10) <= target; n++) {
+  // Jump near the desired occurrence rather than stopping after 5,000 dates.
+  // Keep the original day-of-month anchor when deriving future months.
+  const targetDate = new Date(`${today}T12:00:00Z`);
+  if (Number.isNaN(targetDate.getTime())) return date;
+  const deltaDays = Math.floor((targetDate.getTime() - anchor.getTime()) / 86400000);
+  const monthsApart = (targetDate.getUTCFullYear() - year) * 12 + targetDate.getUTCMonth() - (month - 1);
+  const near = recurrence === 'daily' ? deltaDays :
+    recurrence === 'weekly' ? Math.floor(deltaDays / 7) :
+    recurrence === 'monthly' ? monthsApart :
+    recurrence === 'quarterly' ? Math.floor(monthsApart / 3) :
+    Math.floor(monthsApart / 12);
+  const first = Math.max(1, near);
+  for (let n = first; n <= first + 4 && cursor.toISOString().slice(0, 10) <= target; n++) {
     let yearNext = year;
     let monthNext = month - 1;
     if (recurrence === 'daily') {

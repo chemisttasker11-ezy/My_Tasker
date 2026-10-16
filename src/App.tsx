@@ -2,7 +2,10 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
 import { createTaskController } from './controllers/taskController';
-import { type Category, type Lane, type Priority, type Task, type View, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
+import { importBoardWithRecovery } from './controllers/backupController';
+import { type Category, type Lane, type Priority, type Task, type View, createTask, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted } from './model';
+import { addEntry } from './lib/planning';
+import type { ParsedQuickAdd } from './lib/quickAdd';
 import { downloadable } from './lib/display';
 import { projectBoardSummary } from './lib/boardSummary';
 import { TaskModal } from './components/TaskModal';
@@ -53,7 +56,16 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'All'>('All');
   const [notice, setNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const day = brisbaneToday();
+  const [day, setDay] = useState(brisbaneToday);
+  useEffect(() => {
+    const refresh = () => setDay(current => {
+      const actual = brisbaneToday();
+      return actual === current ? current : actual;
+    });
+    const id = window.setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
   const [trackerLaunch, setTrackerLaunch] = useState<TrackerLaunch>({ anchor: day, scale: 'day' });
   const { active, completed, todayCopies, todayTasks, doneToday, goals, currentWeekScore } =
     useMemo(() => projectBoardSummary(board, day), [board, day]);
@@ -73,13 +85,23 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   function duplicateTask(task: Task) { setEditor({ task: cloneTask(task), lane: task.lane, isCopy: true }); }
   const { planActions, chooseDailyFocus, includeInWeek, saveReview, setCapacity } =
     usePlanningController(board, setBoard, alertNotice);
-  const { saveTask, changeStatus, rescheduleCalendarTask, moveTask,
+  const { saveTask, changeStatus, changeCalendarOccurrenceStatus, rescheduleCalendarTask, moveTask,
     archiveTask, restoreArchived, deleteArchived, toggleTask, toggleSubtask } =
     createTaskController(board, setBoard, alertNotice, () => setEditor(null));
   function openDailyTask(task: Task | null, lane: Lane = 'urgent') {
     if (!task) { showEditor(null, lane); return; }
     if (board.plannedEntries.some(entry => entry.id === task.id)) navigate('today');
     else showEditor(task);
+  }
+  function quickAdd(parsed: ParsedQuickAdd) {
+    if (!parsed.title) return;
+    setBoard(current => {
+      if (current.tasks.length >= 10000) return current;
+      const task = createTask({ title: parsed.title, priority: parsed.priority ?? 'medium', category: current.areas[0]?.id ?? 'Personal', lane: 'urgent', dueDate: parsed.due ?? day });
+      const next = { ...current, tasks: [...current.tasks, task] };
+      return addEntry(next, task.id, parsed.due ?? day);
+    });
+    alertNotice('Task added to your board and scheduled day');
   }
   function exportData() { downloadable(`my-command-centre-${day}.json`, JSON.stringify(board, null, 2)); alertNotice('Backup downloaded'); }
   function downloadRecoveredDraft(draftId: string) {
@@ -97,12 +119,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   }
   async function importData(file: File | undefined) {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { alertNotice('Backup file is too large (10 MB limit)'); return; }
-    try {
-      const incoming = validateImported(JSON.parse(await file.text()));
-      if (!window.confirm('Replace all current tasks with this backup? Export a backup first if you want to keep what you have.')) return;
-      setBoard(incoming); alertNotice('Backup restored');
-    } catch (err) { alertNotice(err instanceof Error ? err.message : 'Could not import backup'); }
+    try { await importBoardWithRecovery(file,board,account?.id,setBoard,alertNotice); }
     finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
   }
   function reset() {
@@ -169,9 +186,9 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
         {view === 'tracker' && <Suspense fallback={<p role="status">Loading your tracker…</p>}><TrackerView board={board} launch={trackerLaunch}/></Suspense>}
         {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={openDailyTask} completed={completed} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore}/>}
         {view === 'board' && <BoardView visible={visible} search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} selectedLane={selectedLane} setSelectedLane={setSelectedLane} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask} moveTask={moveTask} archiveTask={archiveTask} duplicateTask={duplicateTask} changeStatus={changeStatus} toggleSubtask={toggleSubtask}/>}
-        {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={openDailyTask} toggleTask={toggleTask} allTasks={[...board.tasks, ...todayCopies]} completed={completed} focusIds={board.dailyFocus?.[day] ?? []} onFocus={chooseDailyFocus}/>}
+        {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={openDailyTask} toggleTask={toggleTask} toggleSubtask={toggleSubtask} onQuickAdd={quickAdd} allTasks={[...board.tasks, ...todayCopies]} completed={completed} focusIds={(board.dailyFocus?.[day] ?? []).filter(id => board.tasks.some(t=>t.id===id&&!t.archivedAt) || board.plannedEntries.some(e=>e.id===id&&e.date===day))} onFocus={chooseDailyFocus}/>}
         {view === 'week' && <WeekPlannerView board={board} planActions={planActions} onCapacity={setCapacity} today={day} navigate={navigate} onEdit={showEditor} onInclude={includeInWeek} onFocus={chooseDailyFocus} onReview={saveReview}/>}
-        {view === 'calendar' && <CalendarView board={board} planActions={planActions} tasks={board.tasks} completions={board.completions} today={day} onEdit={showEditor} onDuplicate={duplicateTask} onStatus={changeStatus} onReschedule={rescheduleCalendarTask} onTracker={launch => { setTrackerLaunch(launch); navigate('tracker'); }}/>}
+        {view === 'calendar' && <CalendarView board={board} planActions={planActions} tasks={board.tasks} completions={board.completions} today={day} onEdit={showEditor} onDuplicate={duplicateTask} onStatus={changeCalendarOccurrenceStatus} onReschedule={rescheduleCalendarTask} onTracker={launch => { setTrackerLaunch(launch); navigate('tracker'); }}/>}
         {view === 'upcoming' && <UpcomingView active={active} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask}/>}
         {view === 'goals' && <GoalsView goals={goals} showEditor={showEditor}/>}
         {view === 'completed' && <CompletedView board={board} day={day} showEditor={showEditor} navigate={navigate} toggleTask={toggleTask}/>}

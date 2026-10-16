@@ -1,5 +1,5 @@
 import type { BoardState, Task, WeekReview } from './types';
-import { validISODate } from './time';
+import { brisbaneToday, validISODate } from './time';
 /** A weekly plan remains explicit, so postponement cannot silently inflate progress. */
 export function setWeekCommitment(state: BoardState, weekStart: string, task: Task, include: boolean): BoardState {
   if (!validISODate(weekStart) || !weekStart || new Date(`${weekStart}T12:00:00Z`).getUTCDay() !== 1) return state;
@@ -26,7 +26,7 @@ function addDaysUTC(day: string, count: number): string {
 /** Pick no more than three deliberate daily priorities; independent of task status. */
 export function toggleDailyFocus(state: BoardState, day: string, taskId: string): BoardState {
   if (!validISODate(day) || !day || !state.tasks.some(t => t.id === taskId && !t.archivedAt) && !state.plannedEntries.some(e => e.id === taskId && e.date === day)) return state;
-  const current = state.dailyFocus?.[day] ?? [];
+  const current = (state.dailyFocus?.[day] ?? []).filter(id => state.tasks.some(t => t.id === id && !t.archivedAt) || state.plannedEntries.some(e => e.id === id && e.date === day));
   const included = current.includes(taskId);
   if (!included && current.length >= 3) return state;
   const next = included ? current.filter(id => id !== taskId) : [...current, taskId];
@@ -43,7 +43,7 @@ export function saveWeekReview(state: BoardState, weekStart: string, notes: Pick
       ...state.weekPlans,
       [weekStart]: { ...plan, review: {
         wins: notes.wins.trim(), blockers: notes.blockers.trim(), adjustment: notes.adjustment.trim(),
-        savedAt: now.toISOString(), scoreSnapshot: score
+        savedAt: now.toISOString(), scoreSnapshot: addDaysUTC(weekStart, 6) < brisbaneToday(now) && plan.review?.savedAt ? plan.review.scoreSnapshot : score
       } }
     }
   };

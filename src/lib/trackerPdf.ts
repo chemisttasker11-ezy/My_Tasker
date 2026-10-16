@@ -93,13 +93,14 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
   rect(0, 0, width, height, '#ffffff'); rect(0, 0, width, 8, BLUE);
   text('MY TASKER', margin, 31, 10, BLUE, true);
   text(`${options.scale.toUpperCase()} TRACKER`, width - margin - 120, 31, 10, TEAL, true);
-  const titleLines = lines(data.title, inner, 22, true);
+  // Bound header growth to keep a printable task area on one-page exports.
+  const titleLines = lines(data.title, inner, 22, true).slice(0, 2);
   let y = 58;
   for (const line of titleLines) { text(line, margin, y, 22, INK, true); y += 25; }
   y += 1;
   const quoteRows = [direction ? { label: 'MY DIRECTION', value: direction } : null, { label: `DAILY REMINDER · ${options.anchor}`, value: quote }].filter((r): r is { label: string; value: string } => Boolean(r));
   for (const row of quoteRows) {
-    const wrapped = lines(row.value, inner - 144, 10);
+    const wrapped = lines(row.value, inner - 144, 10).slice(0, 3);
     const rowHeight = Math.max(26, wrapped.length * 12 + 12);
     rect(margin, y - 10, inner, rowHeight, row.label === 'MY DIRECTION' ? '#eaf0ff' : '#fff1b8');
     text(row.label, margin + 9, y + 4, 7, INK, true);
@@ -109,7 +110,7 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
   const scope = `${data.tasks.length} tasks · ${data.occurrenceCount} dated occurrences · ${options.area === 'All' ? 'All areas' : options.area}${options.scale === 'year' ? ' · Repeat dates grouped per month' : ''}`;
   text(scope, margin, y + 5, 8); y += 17;
   const bottom = height - 26;
-  const available = bottom - y;
+  const available = Math.max(0, bottom - y);
   // Budget vertical space according to actual content rather than a fixed 32% undated slice.
   // Sparse days with a large backlog no longer shrink all undated titles into a tiny strip.
   const demand = (items: TrackerItem[]) => items.reduce((sum,item) =>
@@ -122,11 +123,11 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
     ? Math.max(options.scale === 'day' ? .22 : .14,
       Math.min(maxFraction, undatedDemand / Math.max(1,datedDemand + undatedDemand)))
     : 0;
-  const undatedHeight = available * undatedFraction;
-  const gridHeight = available - undatedHeight - (undatedHeight ? gap : 0);
+  const undatedHeight = Math.max(0, available * undatedFraction);
+  const gridHeight = Math.max(0, available - undatedHeight - (undatedHeight ? gap : 0));
   const columns = options.scale === 'day' ? 1 : options.scale === 'week' ? 4 : options.scale === 'month' ? 7 : 4;
   const rows = Math.ceil(data.sections.length / columns);
-  const cellW = (inner - gap * (columns - 1)) / columns, cellH = (gridHeight - gap * (rows - 1)) / rows;
+  const cellW = (inner - gap * (columns - 1)) / columns, cellH = Math.max(0, (gridHeight - gap * (rows - 1)) / Math.max(rows, 1));
   let smallestFont = 10;
   function panel(title: string, items: TrackerItem[], x: number, top: number, w: number, h: number, countColumns = 1, outside = false) {
     rect(x, top, w, h, '#ffffff', LINE);
