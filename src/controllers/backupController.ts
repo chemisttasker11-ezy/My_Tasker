@@ -1,5 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
-import { type BoardState, validateImported } from '../model';
+import type { BoardState } from '../domain/types';
+import { validateImported } from '../domain/validation';
 
 /** Recovery-aware, account-scoped import; App coordinates but does not own backup validation. */
 export async function importBoardWithRecovery(
