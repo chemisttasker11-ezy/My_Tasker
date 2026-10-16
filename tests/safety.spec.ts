@@ -52,14 +52,14 @@ test('quota failure keeps unsaved work and displays a persistent banner', async 
   await expect(page.getByRole('alert')).toBeVisible();
 });
 
-test('a stale tab edit reloads the newer board and applies nothing', async ({ page }) => {
+test('a stale tab edit keeps the draft and applies nothing', async ({ page }) => {
   const original = initialState(); original.onboardingStep = undefined;
   await page.evaluate(({ key, board }) => localStorage.setItem(key, JSON.stringify(board)), { key: STORAGE_KEY, board: original }); await page.reload();
   // A same-tab storage write deliberately does not dispatch a storage event, reproducing an unseen concurrent write.
   await page.evaluate(key => { const board = JSON.parse(localStorage.getItem(key)!); board.revision = 8; board.tasks = []; board.theme = 'dark'; localStorage.setItem(key, JSON.stringify(board)); }, STORAGE_KEY);
   await page.getByRole('button', { name: 'New task', exact: true }).click(); await page.getByRole('textbox', { name: 'Task name' }).fill('Stale edit');
   await page.getByRole('button', { name: 'Create task', exact: true }).click();
-  await expect(page.getByRole('status').filter({ hasText: 'attempted change was not applied' })).toBeVisible();
+  await expect(page.getByText('Your draft is kept; save again to apply it.')).toBeVisible();
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).tasks, STORAGE_KEY)).toEqual([]);
 });
 
@@ -76,7 +76,7 @@ test('postponed tasks return to Today on their due date', async ({ page }) => {
   board.tasks = [createTask({ title: 'Ready again', status: 'postponed', dueDate: today })];
   await page.evaluate(({ key, board }) => localStorage.setItem(key, JSON.stringify(board)), { key: STORAGE_KEY, board }); await page.reload();
   await page.getByRole('navigation').getByRole('button', { name: /^Today/ }).click();
-  await expect(page.getByRole('button', { name: 'Ready again', exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByText('Ready again', { exact: true })).toBeVisible();
 });
 
 test('a failed lazy tracker load offers saved data and reload', async ({ page }) => {
