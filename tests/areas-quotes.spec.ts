@@ -1,0 +1,55 @@
+import { expect, test } from '@playwright/test';
+import { createTask, initialState, STORAGE_KEY } from '../src/model';
+
+test.beforeEach(async ({ page }) => {
+  const board = initialState(); board.onboardingStep = undefined;
+  board.tasks = [createTask({ id: 'area-task', title: 'Area task', category: 'Me' })];
+  board.completions = [{ id: 'area-history', taskId: 'area-task', title: 'Area task', category: 'Me', completedAt: '2026-10-16T01:00:00Z', periodKey: 'once' }];
+  await page.clock.install({ time: new Date('2026-10-17T02:00:00Z') });
+  await page.goto('/');
+  await page.evaluate(({ key, board }) => { localStorage.clear(); localStorage.setItem(key, JSON.stringify(board)); }, { key: STORAGE_KEY, board });
+  await page.reload();
+});
+test('add, rename and remove areas reassigns tasks and history persistently', async ({ page }) => {
+  await page.getByRole('button', { name: 'Settings & backup', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Area name', exact: true }).fill('Home');
+  await page.getByRole('button', { name: 'Add area', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Rename area Home', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Rename area Me', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Area name', exact: true }).fill('Personal');
+  await page.getByRole('button', { name: 'Save area name', exact: true }).click();
+  let data = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), STORAGE_KEY);
+  expect(data.tasks[0].category).toBe('Personal'); expect(data.completions[0].category).toBe('Personal');
+  await page.getByRole('button', { name: 'Remove area Personal', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Move tasks and history to' }).selectOption('Home');
+  await page.getByRole('button', { name: 'Move tasks and remove area', exact: true }).click();
+  await page.reload();
+  data = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), STORAGE_KEY);
+  expect(data.areas.map((a: { id: string }) => a.id)).toContain('Home');
+  expect(data.areas.map((a: { id: string }) => a.id)).not.toContain('Me');
+  expect(data.areas.map((a: { id: string }) => a.id)).not.toContain('Personal');
+  expect(data.tasks).toHaveLength(1); expect(data.completions).toHaveLength(1);
+  expect(data.tasks[0].category).toBe('Home'); expect(data.completions[0].category).toBe('Home');
+  await page.getByRole('button', { name: 'My task board', exact: true }).click();
+  await page.getByRole('button', { name: 'Area task', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Area of life' })).toHaveValue('Home');
+});
+test('custom quote, direction and explicit daily choice persist after reload', async ({ page }) => {
+  await page.getByRole('button', { name: 'Direction & quotes', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Your direction quote', exact: true }).fill('Make room for family.');
+  await page.getByRole('button', { name: 'Save direction', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Custom quote', exact: true }).fill('Small steps count.');
+  await page.getByRole('button', { name: 'Save custom quote', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Quote theme', exact: true }).selectOption('My quotes');
+  await page.getByRole('button', { name: /^Use for / }).click();
+  await page.reload();
+  const banner = page.getByRole('region', { name: 'Daily inspiration' });
+  await expect(banner).toContainText('Make room for family.'); await expect(banner).toContainText('Small steps count.');
+  const data = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), STORAGE_KEY);
+  expect(data.quotes.custom).toEqual([expect.objectContaining({ text: 'Small steps count.', theme: 'My quotes' })]);
+  expect(data.quotes.daily['2026-10-17']).toBe('Small steps count.');
+  await page.getByRole('button', { name: 'Direction & quotes', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: 'Quote theme', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'Quote theme', exact: true }).selectOption('My quotes');
+  await expect(page.getByRole('article').getByText('Small steps count.', { exact: true })).toBeVisible();
+});
