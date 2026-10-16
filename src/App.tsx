@@ -25,7 +25,10 @@ import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
 import { dailyQuote, quoteSettings } from './lib/quotes';
 import { relevantTasksForDate } from './lib/planProjection';
-import { Library, Quote, Printer } from 'lucide-react';
+import { Library, Quote, Printer, LogOut, CircleHelp } from 'lucide-react';
+import { WelcomeGuide } from './components/WelcomeGuide';
+import { sampleBoard } from './lib/sampleBoard';
+import { saveBoard as saveCloudBoard, type CloudSnapshot, type SignedInUser } from './lib/authApi';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
 
 const ICONS = { overview: LayoutDashboard, board: ListTodo, today: Sun, week: BarChart3, calendar: CalendarRange, upcoming: CalendarDays, goals: Target, completed: CheckCircle2, archived: Archive, settings: Settings2, library: Library, quotes: Quote, tracker: Printer };
@@ -36,9 +39,23 @@ const NAV: { id: View; label: string }[] = [
   { id: 'archived', label: 'Archived tasks' }, { id: 'library', label: 'Life task library' }, { id: 'tracker', label: 'Printable tracker' }, { id: 'quotes', label: 'Direction & quotes' }
 ];
 
-export default function App() {
-  const [board, setBoard] = useState<BoardState>(readState);
+interface AppProps {
+  account?: SignedInUser;
+  initialCloud?: CloudSnapshot;
+  onSignOut?: () => Promise<void>;
+}
+export default function App({ account, initialCloud, onSignOut }: AppProps = {}) {
+  const [board, setBoard] = useState<BoardState>(() =>
+    account ? (initialCloud?.board ? validateImported(initialCloud.board) : sampleBoard()) : readState());
   const lastPersisted = useRef(JSON.stringify(board));
+  const cloudSaved = useRef(JSON.stringify(initialCloud?.board ?? null));
+  const cloudRevision = useRef(initialCloud?.revision ?? 0);
+  const cloudQueue = useRef<Promise<void>>(Promise.resolve());
+  const cloudBlocked = useRef(false);
+  const [cloudFailure, setCloudFailure] = useState('');
+  const guideKey = account ? `mytasker-guide:${account.id}` : '';
+  const [guideOpen, setGuideOpen] = useState(() => Boolean(account && !localStorage.getItem(guideKey)));
+  const closeGuide = () => { setGuideOpen(false); if (guideKey) localStorage.setItem(guideKey,'seen'); };
   const [view, setView] = useState<View>('overview');
   const [selectedLane, setSelectedLane] = useState<Lane>('urgent');
   const [editor, setEditor] = useState<{ task: Task | null; lane: Lane; date?: string; isCopy?: boolean } | null>(null);
@@ -68,20 +85,42 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = board.theme;
+    if (account) return;
     const encoded = JSON.stringify(board);
     if (encoded === lastPersisted.current) return;
     try { localStorage.setItem(STORAGE_KEY, encoded); lastPersisted.current = encoded; setSaveError(false); }
     catch { setSaveError(true); }
-  }, [board]);
+  }, [board, account]);
 
   useEffect(() => {
+    if (!account || cloudBlocked.current) return;
+    const snapshot = JSON.stringify(board);
+    if (snapshot === cloudSaved.current) return;
+    const timer = window.setTimeout(() => {
+      cloudQueue.current = cloudQueue.current.then(async () => {
+        if (cloudBlocked.current || cloudSaved.current === snapshot) return;
+        const saved = await saveCloudBoard(JSON.parse(snapshot) as BoardState, cloudRevision.current);
+        cloudRevision.current = saved.revision;
+        cloudSaved.current = snapshot;
+        setSaveError(false);
+      }).catch((error: unknown) => {
+        cloudBlocked.current = true;
+        setCloudFailure(error instanceof Error ? error.message : 'Could not save to your account.');
+        setSaveError(true);
+      });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [board, account]);
+
+  useEffect(() => {
+    if (account) return;
     const sync = (event: StorageEvent) => {
       if (event.key !== STORAGE_KEY || !event.newValue) return;
       try { const incoming = validateImported(JSON.parse(event.newValue)); lastPersisted.current = JSON.stringify(incoming); setBoard(incoming); } catch { /* Keep the current board if another tab wrote invalid data. */ }
     };
     window.addEventListener('storage', sync);
     return () => window.removeEventListener('storage', sync);
-  }, []);
+  }, [account]);
   useEffect(() => {
     if (categoryFilter !== 'All' && !board.areas.some(a => a.id === categoryFilter)) setCategoryFilter('All');
   }, [board.areas, categoryFilter]);
@@ -180,8 +219,37 @@ export default function App() {
     finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
   }
   function reset() {
-    if (!window.confirm('Replace ALL your tasks and history with the original notebook tasks? This cannot be undone unless you exported a backup.')) return;
-    setBoard(initialState()); navigate('overview'); alertNotice('Original notebook tasks restored');
+    if (!window.confirm('Replace ALL tasks and history? Export a backup first if you want to keep your work.')) return;
+    setBoard(account ? sampleBoard() : initialState());
+    navigate('overview'); alertNotice('Starter tasks restored');
+  }
+  async function signOutSafely() {
+    if (!account || !onSignOut) return;
+    await cloudQueue.current;
+    if (cloudBlocked.current) { alertNotice('Cloud save failed. Export a backup before signing out.'); return; }
+    const snapshot = JSON.stringify(board);
+    if (cloudSaved.current !== snapshot) {
+      try {
+        const response = await saveCloudBoard(board, cloudRevision.current);
+        cloudRevision.current = response.revision;
+        cloudSaved.current = snapshot;
+      } catch (error) {
+        cloudBlocked.current = true; setSaveError(true);
+        setCloudFailure(error instanceof Error ? error.message : 'Cloud save could not complete.');
+        return;
+      }
+    }
+    try { await onSignOut(); }
+    catch (error) { alertNotice(error instanceof Error ? error.message : 'Logout failed.'); }
+  }
+  function importFromThisBrowser() {
+    const legacy = localStorage.getItem(STORAGE_KEY);
+    if (!legacy) { alertNotice('No earlier local task board was found.'); return; }
+    try {
+      const restored = validateImported(JSON.parse(legacy));
+      if (!window.confirm('Replace your signed-in board with tasks saved in this browser? This will sync them to your account.')) return;
+      setBoard(restored); alertNotice('Imported local tasks into your private account.');
+    } catch (error) { alertNotice(error instanceof Error ? error.message : 'Could not read the local board.'); }
   }
   const selectedNav = NAV.find(n => n.id === view);
   const reminder = dailyQuote(board.quotes, day, relevantTasksForDate(board,day));
@@ -209,9 +277,10 @@ export default function App() {
     </aside>
     {mobileNav && <button className="mobile-backdrop" onClick={() => setMobileNav(false)} aria-label="Close navigation"/>}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right"><span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button></div></header>
+      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right">{account && <button type="button" className="icon-button auth-help-top" aria-label="Show getting started guide" onClick={() => setGuideOpen(true)}><CircleHelp size={19}/></button>}<span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button>
+        {account && <button className="icon-button auth-logout-top" type="button" aria-label="Save and sign out" onClick={() => void signOutSafely()}><LogOut size={20}/></button>}</div></header>
       <main className="content" id="main-content" tabIndex={-1}>
-        {saveError && <div className="save-warning" role="alert">Browser storage is unavailable or full. Export your work before leaving this page.</div>}
+        {saveError && <div className="save-warning" role="alert">{account ? `Your cloud changes could not be saved: ${cloudFailure}. Export a backup from Settings before leaving or reloading this page.` : 'Browser storage is unavailable or full. Export your work before leaving this page.'}</div>}
         {view !== 'tracker' && view !== 'quotes' && <section className="direction-banner" aria-label="Daily inspiration"><div><span>MY DIRECTION</span><p>{quoteSettings(board.quotes).direction || 'Choose a reminder of what matters to you.'}</p></div><div><span>TODAY’S REMINDER</span><p>{reminder.text}</p></div><button className="icon-button" aria-label="Edit direction and quotes" onClick={() => navigate('quotes')}><Quote size={18}/></button></section>}
         {view === 'library' && <LibraryView tasks={board.tasks} onAdd={addTemplates}/>}
         {view === 'quotes' && <QuotesView value={board.quotes} today={day} board={board} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
@@ -225,10 +294,12 @@ export default function App() {
         {view === 'goals' && <GoalsView goals={goals} showEditor={showEditor}/>}
         {view === 'completed' && <CompletedView board={board} day={day} showEditor={showEditor} navigate={navigate} toggleTask={toggleTask}/>}
         {view === 'archived' && <ArchivedView tasks={board.tasks.filter(t => Boolean(t.archivedAt))} restore={restoreArchived} remove={deleteArchived}/> }
-        {view === 'settings' && <SettingsView board={board} setBoard={setBoard} exportData={exportData} importData={importData} reset={reset} fileInputRef={fileInputRef} navigate={navigate} alertNotice={alertNotice}/>}
-        <footer className="site-footer"><span>Built for your real life <span>✳</span></span><span>Local-first · Australia/Brisbane · Version 1.0</span></footer>
+        {view === 'settings' && <SettingsView board={board} setBoard={setBoard} exportData={exportData} importData={importData} reset={reset} fileInputRef={fileInputRef} navigate={navigate} alertNotice={alertNotice}
+          account={account} signOut={signOutSafely} showGuide={() => setGuideOpen(true)} importLocal={importFromThisBrowser}/>}
+        <footer className="site-footer"><span>Built for your real life <span>✳</span></span><span>{account ? 'Private account sync' : 'Local demo'} · Australia/Brisbane · Version 1.1</span></footer>
       </main>
     </div>
+    <WelcomeGuide open={guideOpen} onClose={closeGuide} onBoard={() => navigate('board')} onWeek={() => navigate('week')}/>
     {editor && <TaskModal key={`${editor.task?.id ?? `new-${editor.lane}`}-${editor.date ?? ''}`} task={editor.task} defaultLane={editor.lane} defaultDate={editor.date ?? ''} effectiveStatus={editor.task ? visibleStatus(editor.task, isCompleted(editor.task, board.completions, day)) : undefined} isCopy={editor.isCopy} onDismiss={() => setEditor(null)} onSave={saveTask}/>}
     {notice && <div className="toast" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification"><X size={15}/></button></div>}
   </div></AreasContext.Provider>;
