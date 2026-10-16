@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTask, initialState } from '../model';
+import { createTask, initialState, validateImported } from '../model';
 import { createDraftId, draftKey, listPendingDrafts, pruneSavedDrafts,
   rebasePendingDraft, removePendingDraft, savePendingDraft } from './pendingDraftStore';
 
@@ -30,7 +30,7 @@ describe('private unsynced draft recovery adapter',()=>{
     const b={...initialState(),tasks:[createTask({title:'Draft B'})]};
     savePendingDraft(12,first,0,a,storage);
     savePendingDraft(12,other,0,b,storage);
-    expect(pruneSavedDrafts(12,JSON.stringify(a),storage)).toBe(1);
+    expect(pruneSavedDrafts(12,JSON.stringify(validateImported(a)),storage)).toBe(1);
     expect(listPendingDrafts(12,storage)[0].board.tasks[0].title).toBe('Draft B');
   });
   it('rebases a later edit only following its own earlier acknowledged save',()=>{
