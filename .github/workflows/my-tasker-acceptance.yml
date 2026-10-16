@@ -150,6 +150,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Reject cross-environment deployment routes
+        run: python3 scripts/check-deployment-isolation.py
       - name: Validate deployment shell scripts
         run: bash -n scripts/deploy-mytasker.sh scripts/deploy-mytasker-staging.sh scripts/smoke-mytasker.sh
       - name: Generate disposable Compose environment files
