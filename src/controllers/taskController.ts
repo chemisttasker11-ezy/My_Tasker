@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import {
   type BoardState, type Task, type TaskStatus, type Lane,
-  saveTaskChanges, setTaskStatus, moveInBoard, rescheduleTask, toggleCompletion
+  saveTaskChanges, setTaskStatus, setCalendarOccurrenceStatus, moveInBoard, rescheduleTask, toggleCompletion
 } from '../model';
 import { LANE_LABEL } from '../lib/display';
 import { editEntry } from '../lib/planning';
@@ -20,6 +20,17 @@ export function createTaskController(
   function changeStatus(id: string, status: TaskStatus, postponedTo?: string) {
     setBoard(s => setTaskStatus(s, id, status, postponedTo));
     alertNotice(status === 'postponed' ? 'Task postponed to its new date' : `Status updated`);
+  }
+  function changeCalendarOccurrenceStatus(id: string, status: TaskStatus, postponedTo?: string, occurrenceDate?: string) {
+    if (!occurrenceDate) { changeStatus(id,status,postponedTo); return; }
+    const task = board.tasks.find(t=>t.id===id);
+    if (task && task.recurrence!=='none' && occurrenceDate!==new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Brisbane',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()) &&
+      status!=='finished' && status!=='not-started') {
+      alertNotice('To change progress or postpone the whole recurring series, edit the source task. Calendar history supports Finished and Not started for individual past occurrences.');
+      return;
+    }
+    setBoard(s=>setCalendarOccurrenceStatus(s,id,status,occurrenceDate,postponedTo));
+    alertNotice('Calendar occurrence updated');
   }
   function rescheduleCalendarTask(id: string, date: string) {
     setBoard(s => rescheduleTask(s, id, date));
@@ -57,7 +68,7 @@ export function createTaskController(
   }
 
   return {
-    saveTask, changeStatus, rescheduleCalendarTask, moveTask,
+    saveTask, changeStatus, changeCalendarOccurrenceStatus, rescheduleCalendarTask, moveTask,
     archiveTask, restoreArchived, deleteArchived, toggleTask, toggleSubtask
   };
 }
