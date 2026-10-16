@@ -1,9 +1,10 @@
 {
-  "name": "My Command Centre",
-  "short_name": "Command Centre",
+  "name": "My Planner",
+  "short_name": "My Planner",
+  "description": "A free, ADHD-friendly, local-first planner for adults. Make room for life, with no account needed.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8f8fa",
-  "theme_color": "#383d92",
+  "background_color": "#f0f6ff",
+  "theme_color": "#1648df",
   "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

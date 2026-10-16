@@ -1,70 +1,96 @@
-# My Tasker
+﻿# My Planner
 
-A standalone personal task board and planner built with React, TypeScript and Vite. Only the contents of `apps/my-command-centre/` from ChemistTasker PR #180 were extracted. App files are directly at this repository's root; the parent ChemistTasker project and backend are not included.
+Make room for life.
 
-**Delivery status:** development snapshot with unfinished planning work. Read [HANDOVER.md](HANDOVER.md) for implemented features, the user's latest requirements and outstanding issues. The new drag-from-board planning workflow has not been implemented.
+My Planner is a free, ADHD-friendly, local-first planner for adults. Bring daily tasks, longer-term goals and the rest of life into one workspace, with no account or backend required. Built with React, TypeScript and Vite.
+
+## Features
+
+- **Today:** a Now card, daily timeline and focus mode with a timer to help you work on one thing at a time.
+- **Task board:** organise tasks with drag and drop, priorities, progress states, duplication and archiving.
+- **Week planner:** plan tasks for the week and copy them to selected days.
+- **Calendar day planning:** build and reorder a day's plan alongside recurring task occurrences.
+- **Recurrence and checklists:** repeat routines and break tasks into smaller steps.
+- **Quick add:** capture a task without opening the full editor.
+- **Life task library:** 64 optional templates, including a starter set of 12.
+- **Areas and goals:** customise areas of life and keep longer-term goals visible.
+- **Direction and quotes:** original encouragement, daily selections and your own quotes.
+- **Printable PDF tracker:** day, week, month and year sheets, with A4/A3 landscape export and optional checklists.
+- **JSON backups:** export and restore your tasks, plans, history, areas and settings.
+- **Getting started:** optional onboarding and an optional weekly score, with commitments and reviews.
+- **Accessible, responsive interface:** keyboard navigation, focus indicators, light/dark themes and layouts for smaller screens.
+
+## Privacy and your data
+
+Your planner data stays in this browser's localStorage. There are no accounts, cloud sync or server backups. The storage key remains `my-command-centre:v1` so existing saved boards continue to load.
+
+Each browser profile and site address has separate storage. Changing the hostname, port or deployment address will show a separate board. Clearing site data or losing the browser profile can remove your planner; private browsing may discard it when the session ends. Local-first storage does not mean the site is guaranteed to load offline.
+
+To back up:
+
+1. Open **Settings & backup** and choose **Download backup**.
+2. Save the downloaded `my-planner-YYYY-MM-DD.backup.json` file somewhere safe, ideally outside this device. Keep previous copies.
+3. To restore or transfer your planner, open **Settings & backup → Import backup**, select the JSON file and review the confirmation. Import replaces the current board; download a backup of that board first.
+
+Older My Tasker / `my-tasker` backups still import: the JSON format is unchanged and filenames do not determine compatibility. Recovery screens, import validation and cross-tab conflict handling help protect data, but recovery copies in the same browser are not a substitute for downloaded backups. Backup files contain your planner data; share them only intentionally. PDFs are printable snapshots and cannot be imported as backups.
 
 ## Run locally
 
-Use Node.js 20.19+ or a current supported LTS release and npm:
+Use Node.js 20.19+ and npm. From the repository root:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-Open **http://127.0.0.1:5180/**. On Windows, after installing dependencies, double-click `Start-My-Tasker.cmd`. Keep this address to access the same browser data. This app runs independently from ChemistTasker and needs no backend or environment secrets.
+Open **http://127.0.0.1:5180/**. The development server uses port **5180** with strict port checking. Keep using the same address and browser profile to access the same data. On Windows, after installing dependencies, you can also use the existing `Start-My-Tasker.cmd` launcher.
+
+## Build
 
 ```sh
 npm run build
 npm run preview
 ```
 
-The static output goes to `dist/`. Vercel and Netlify configurations are included. A GitHub push does not deploy the app.
+The build checks TypeScript and creates the static site in `dist/`. Preview serves it at **http://127.0.0.1:5180/**; stop the development server first if it is using that port.
 
-## Included features
-
-- Six-lane task board with drag/drop, editing, checklists, priorities, recurrence, five progress states, duplication, postponement and archive/restore.
-- Today, weekly commitments/reviews/scoring, calendar day/week/month/year, upcoming tasks, goals and completion history.
-- Life task library: 64 detailed templates, including 12 starters, with descriptions, timing, estimates and checklists. Selective/bulk addition avoids duplicate templates.
-- Editable areas in **Settings & backup**, with task/history reassignment when removing an area.
-- Persistent direction reminder, 36 original positive quotes, custom quotes and daily selections in **Direction & quotes**.
-- **Printable tracker** with day/week/month/year sheets, fit-page preview, zoom/full screen, one-page A4/A3 landscape PDF, area filter and optional checklists/undated tasks. Year sheets group repeating dates per month.
-- Strong cobalt, teal, coral and yellow palette; bundled Nunito Sans/Outfit fonts; responsive screens and the reported postpone-panel overlap fix.
-- Local browser persistence, same-origin tab updates, JSON backup/import.
-
-The 12 starters were added to the user's existing local board during development. Browser data is not committed. A fresh browser can add its own set in **Life task library → Add starter set (12)**.
-
-## Data and current limits
-
-Data lives in `localStorage`, using `my-command-centre:v1` for compatibility. Use **Settings & backup → Download backup** to preserve or transfer it. A different browser, device, hostname or port has separate data. There are no accounts, cloud sync or server backups.
-
-Calendar occurrences currently derive from a task's due date and recurrence. Rescheduling a repeating task moves its series. Independent scheduled copies and manual per-day ordering are outstanding work.
-
-PDFs are snapshots; editing a downloaded PDF does not update the board. Dense sheets shrink text and show a warning. PDF layout, quote consistency and broader character support need the follow-ups in the handover.
-
-## Validation
-
-No tests or build were run for this handover/push, as requested. Existing test source and configuration are retained for future work:
+## Test
 
 ```sh
 npm test
+```
+
+For browser tests, install Chromium once, then run Playwright:
+
+```sh
 npx playwright install chromium
 npm run test:e2e
 ```
 
-Browser tests use port **5181** with separate browser storage. They must not reset the user's storage on 5180. See [REVIEW.md](REVIEW.md) for earlier results and the final validation gap.
+Playwright starts its own server at **http://127.0.0.1:5181/**. Leave port **5181** free. Its test browser uses separate storage from your everyday planner on port 5180.
 
-## Main files
+## Deploy
 
-- `src/model.ts`: domain types, state changes, recurrence, initial tasks, backup validation.
-- `src/App.tsx`: navigation, mutations and persistence.
-- `src/views/`: application screens.
-- `src/lib/lifeLibrary.ts`, `areas.tsx`, `quotes.ts`: templates, editable areas and encouragement.
-- `src/lib/calendar.ts`, `tracker.ts`, `trackerPdf.ts`: occurrence projection and shared SVG/PDF layout.
-- `src/styles/energy.css`: latest design and overlap fixes, loaded after earlier styles.
-- `public/fonts/`: PDF fonts and licence.
-- `tests/`, `src/**/*.test.ts`: retained browser/unit tests.
-- `preview.html`: inherited static mock-up; the React app is authoritative.
+Deploy this repository as a static site on Netlify or Vercel, using the repository root as the project directory:
 
-Source: [ChemistTasker PR #180](https://github.com/chemisttasker11-ezy/ChemistTasker-Ezy1/pull/180), extracted at `e502bfb9e1c4485212e90198f40138bc14e1353c` on 16 October 2026.
+| Platform | Existing configuration | Build command | Publish/output directory |
+| --- | --- | --- | --- |
+| Netlify | [netlify.toml](netlify.toml) | `npm run build` | `dist` |
+| Vercel | [vercel.json](vercel.json) | `npm run build` | `dist` |
+
+Both configurations match the local build. Netlify includes a fallback to `index.html`; Vercel identifies the project as Vite. No backend or environment secrets are required. Export a JSON backup before switching site addresses, then import it at the new address to transfer your planner.
+
+## Screenshots
+
+Screenshot paths reserved for future captures; these images are not included yet:
+
+- Today: `docs/screenshots/today.png`
+- Task board: `docs/screenshots/task-board.png`
+- Week planner: `docs/screenshots/week-planner.png`
+- Calendar day planning: `docs/screenshots/calendar.png`
+- Focus mode: `docs/screenshots/focus-mode.png`
+- Printable tracker: `docs/screenshots/printable-tracker.png`
+
+## Project history
+
+Originally extracted from [ChemistTasker PR #180](https://github.com/chemisttasker11-ezy/ChemistTasker-Ezy1/pull/180). This repository is a standalone browser app. See [CHANGELOG.md](CHANGELOG.md) for release notes. The retained `preview.html` is an earlier static mock-up; the running React app is the current interface.

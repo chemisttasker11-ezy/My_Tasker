@@ -18,7 +18,7 @@ export function RecoveryScreen({ message, raw, storageError, onReplace }: { mess
   }
   return <main className="safety-screen panel"><h1>Recover your board</h1><p>{message}</p>
     {storageError && <p role="alert">Browser storage is unavailable or full. Download your data before leaving.</p>}
-    <button className="button button-primary" onClick={() => downloadable('my-command-centre-recovery.json', raw)}>Download raw data</button>
+    <button className="button button-primary" onClick={() => downloadable('my-planner-recovery.backup.json', raw)}>Download raw data</button>
     <input ref={input} hidden type="file" accept=".json,application/json" onChange={e => void importFile(e.target.files?.[0])}/>
     <button className="button button-secondary" onClick={() => input.current?.click()}>Try importing a backup</button>
     <button className="button button-secondary" onClick={() => { if (window.confirm('Start with an empty board? The original payload will be kept in recovery storage.')) onReplace(initialState()); }}>Start fresh</button>
@@ -41,7 +41,7 @@ export class DataErrorBoundary extends Component<{ children: ReactNode }, { fail
   render() {
     if (!this.state.failed) return this.props.children;
     return <main className="panel safety-screen"><h1>Something interrupted your planner</h1><p>Download your saved data, then reload to try again.</p>
-      <button className="button button-primary" onClick={() => { try { downloadable('my-command-centre-backup.json', localStorage.getItem(STORAGE_KEY) ?? ''); } catch { window.alert('Storage is unavailable. Please try reloading.'); } }}>Download my data</button>
+      <button className="button button-primary" onClick={() => { try { downloadable('my-planner.backup.json', localStorage.getItem(STORAGE_KEY) ?? ''); } catch { window.alert('Storage is unavailable. Please try reloading.'); } }}>Download my data</button>
       <button className="button button-secondary" onClick={() => window.location.reload()}>Reload</button></main>;
   }
 }

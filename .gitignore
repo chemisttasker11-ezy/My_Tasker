@@ -11,3 +11,6 @@ test-results/
 .DS_Store
 *.local
 *-backup.json
+*.backup.json
+.claude/
+*.log

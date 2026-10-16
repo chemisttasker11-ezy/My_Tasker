@@ -231,7 +231,7 @@ export default function App() {
   function toggleSubtask(taskId: string, subtaskId: string) {
     setBoard(s => ({ ...s, tasks: s.tasks.map(t => t.id !== taskId ? t : { ...t, updatedAt: new Date().toISOString(), subtasks: t.subtasks.map(st => st.id === subtaskId ? { ...st, done: !st.done } : st) }) }));
   }
-  function exportData() { downloadable(`my-command-centre-${day}.json`, JSON.stringify(board, null, 2)); alertNotice('Backup downloaded'); }
+  function exportData() { downloadable(`my-planner-${day}.backup.json`, JSON.stringify(board, null, 2)); alertNotice('Backup downloaded'); }
   async function importData(file: File | undefined) {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { alertNotice('Backup file is too large (10 MB limit)'); return; }
@@ -280,7 +280,7 @@ export default function App() {
   return <AreasContext.Provider value={board.areas}><div className="app-shell">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
-      <div className="brand"><div className="brand-mark"><Check size={21} strokeWidth={3}/></div><div className="brand-name">My<span>Tasker</span><strong>MAKE ROOM FOR LIFE</strong></div><button className="icon-button mobile-close" type="button" aria-label="Close menu" onClick={() => setMobileNav(false)}><X size={20}/></button></div>
+      <div className="brand"><div className="brand-mark"><Check size={21} strokeWidth={3}/></div><div className="brand-name">My <span>Planner</span><strong>MAKE ROOM FOR LIFE</strong></div><button className="icon-button mobile-close" type="button" aria-label="Close menu" onClick={() => setMobileNav(false)}><X size={20}/></button></div>
       <div className="workspace-label">YOUR WORKSPACE <span className="workspace-dot" /></div>
       <nav id="main-navigation" className="side-nav" aria-label="Main navigation">
         <p className="nav-section">WORKSPACE</p>
@@ -298,7 +298,7 @@ export default function App() {
     <div className="main-shell">
       <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right"><span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button></div></header>
       <main className="content" id="main-content" tabIndex={-1}>
-        {conflictBackup && <div className="save-warning" role="status">An edit was not applied after a conflict. <button className="button button-secondary" onClick={() => downloadable('my-command-centre-unapplied.json', conflictBackup)}>Download unapplied changes</button><button className="button button-secondary" onClick={() => setConflictBackup('')}>Dismiss</button></div>}
+        {conflictBackup && <div className="save-warning" role="status">An edit was not applied after a conflict. <button className="button button-secondary" onClick={() => downloadable('my-planner-unapplied.backup.json', conflictBackup)}>Download unapplied changes</button><button className="button button-secondary" onClick={() => setConflictBackup('')}>Dismiss</button></div>}
         {saveError && <div className="save-warning" role="alert">Browser storage is unavailable or full. Export your work before leaving this page.</div>}
         {(view === 'overview' || view === 'today') && <section className="direction-banner" aria-label="Daily inspiration"><div><span>MY DIRECTION</span><p>{quoteSettings(board.quotes).direction || 'Choose a reminder of what matters to you.'}</p></div><div><span>TODAY’S REMINDER</span><p>{reminder.text}</p></div><button className="icon-button" aria-label="Edit direction and quotes" onClick={() => navigate('quotes')}><Quote size={18}/></button></section>}
         {board.onboardingStep && <OnboardingCard step={board.onboardingStep} onStep={step => setBoard(s => ({ ...s, onboardingStep: step }))} onLibrary={() => { setBoard(s => ({ ...s, onboardingStep: undefined })); navigate('library'); }}/> }

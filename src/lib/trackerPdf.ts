@@ -174,8 +174,8 @@ export async function buildTrackerDocument(data: TrackerData, options: TrackerOp
     pdf.addFileToVFS(`Nunito-${style}.ttf`, base64); pdf.addFont(`Nunito-${style}.ttf`, 'TrackerSans', style);
   }
   pdf.setFont('TrackerSans', 'normal');
-  const safeDocTitle = sanitizePdfText(`My Tasker · ${options.scale} tracker · ${data.title}`);
-  pdf.setProperties({ title: safeDocTitle, creator: 'My Tasker', subject: 'One-page personal task tracker' });
+  const safeDocTitle = sanitizePdfText(`My Planner · ${options.scale} tracker · ${data.title}`);
+  pdf.setProperties({ title: safeDocTitle, creator: 'My Planner', subject: 'One-page personal task tracker' });
   const width = pdf.internal.pageSize.getWidth(), height = pdf.internal.pageSize.getHeight();
   const margin = 22, inner = width - margin * 2, gap = 7;
   const svg: string[] = [`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><defs><style>@font-face{font-family:TrackerSans;src:url(data:font/ttf;base64,${regular}) format('truetype');font-weight:400}@font-face{font-family:TrackerSans;src:url(data:font/ttf;base64,${bold}) format('truetype');font-weight:700}text{font-family:TrackerSans,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif,'Apple Color Emoji','Segoe UI Emoji';}</style></defs>`];
