@@ -1,8 +1,9 @@
 import type { Dispatch, SetStateAction } from 'react';
 import {
   type BoardState, type Task, type TaskStatus, type Lane, brisbaneToday,
-  saveTaskChanges, setTaskStatus, setCalendarOccurrenceStatus, moveInBoard, rescheduleTask, toggleCompletion
+  saveTaskChanges, setTaskStatus, moveInBoard, rescheduleTask, toggleCompletion
 } from '../model';
+import { setCalendarOccurrenceStatus } from '../domain/taskActions';
 import { LANE_LABEL } from '../lib/display';
 import { editEntry } from '../lib/planning';
 
