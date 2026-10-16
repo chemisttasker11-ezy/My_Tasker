@@ -1,7 +1,7 @@
 import { useMemo, useState, type DragEvent } from 'react';
 import { ArrowDownToLine, Check, CheckCheck, ClipboardCopy, ClipboardPaste, Copy, GripVertical, MoveRight, Search, Target, Trash2 } from 'lucide-react';
 import { type BoardState, type PlannedEntry, type TaskStatus } from '../model';
-import { addDays, dateTitle, mondayOf } from '../lib/calendar';
+import { dateTitle } from '../lib/calendar';
 import { dragPayload, entriesForDay, parseDragPayload, type DayClipboard } from '../lib/planning';
 import { STATUS_LABEL, STATUS_ORDER } from '../lib/progress';
 

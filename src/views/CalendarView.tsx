@@ -33,6 +33,9 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
   const areas = useAreas();
   const [scale, setScale] = useState<CalendarScale>('month');
   const [planningDay, setPlanningDay] = useState<string | null>(null);
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
+  const [extraDate, setExtraDate] = useState(today);
   const [anchor, setAnchor] = useState(today);
   const [category, setCategory] = useState<Category | 'All'>('All');
   const [search, setSearch] = useState('');
@@ -70,6 +73,14 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
   const otherHours = withTime.filter(item => { const h = Number(item.task.scheduledTime.slice(0, 2)); return h < 6 || h > 22; });
 
   return <>
+    {selectionOpen && <div className="plan-day-dialog-backdrop" onMouseDown={e=>{ if(e.target===e.currentTarget)setSelectionOpen(false); }}>
+      <section className="plan-day-dialog" role="dialog" aria-modal="true" aria-label="Copy and paste multiple calendar days">
+        <header className="plan-day-dialog-head"><div><h2>Copy & paste calendar days</h2><p>Select up to 31 dates and copy their plan. You can paste to one date, selected dates, or a new starting week.</p></div><button type="button" className="button button-primary" onClick={()=>setSelectionOpen(false)}>Close</button></header>
+        <div className="calendar-selection-add"><label>Add a date <input type="date" value={extraDate} onChange={e=>setExtraDate(e.target.value)}/></label><button type="button" className="button button-secondary" disabled={!extraDate || selectedDates.includes(extraDate) || selectedDates.length>=31} onClick={()=>setSelectedDates(s=>[...s,extraDate].sort())}>Include date</button></div>
+        <div className="calendar-date-selection">{selectedDates.map(date=><button className="button button-secondary" type="button" key={date} aria-label={`Remove selected day ${date}`} onClick={()=>setSelectedDates(s=>s.filter(d=>d!==date))}>{date} ×</button>)}</div>
+        <PlanWorkspace key={selectedDates.join(',')} board={board} dates={selectedDates.length?selectedDates:[anchor]} actions={planActions} title="Copy or arrange selected days"/>
+      </section>
+    </div>}
     {planningDay && <div className="plan-day-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setPlanningDay(null);}}>
       <section className="plan-day-dialog" role="dialog" aria-modal="true" aria-label={`Plan ${formatDate(planningDay)}`}>
         <header className="plan-day-dialog-head"><h2>Plan {formatDate(planningDay)}</h2><button type="button" className="button button-primary" onClick={()=>setPlanningDay(null)}>Close planner</button></header>
@@ -78,6 +89,7 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
     </div>}
     <div className="page-title-row calendar-page-title"><div><span className="eyebrow">MAKE TIME FOR WHAT MATTERS</span><h1>Calendar <span className="heading-sparkle">✳</span></h1><p>Tap a day to open its planner, add board tasks, rearrange independent copies and copy/paste plans.</p></div><button className="button button-primary" onClick={() => openDay(anchor)}><Plus size={17}/> Plan {formatDate(anchor)}</button></div>
     <section className="calendar-toolbar panel" aria-label="Calendar controls">
+      <button type="button" className="button button-secondary" onClick={()=>{setSelectedDates([anchor]);setExtraDate(anchor);setSelectionOpen(true);}}>Copy / paste days</button>
       <button className="button button-primary" onClick={() => onTracker({ anchor, scale, area: category })}>One-page view & PDF</button>
       <div className="calendar-navigation">
         <button className="icon-button" aria-label="Previous period" onClick={() => setAnchor(value => shiftCalendar(value, scale, -1))}><ChevronLeft size={20}/></button>
@@ -117,7 +129,7 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
             const tasksOnDate = byDay.get(date) ?? [];
             const plannedOnDate = plannedByDay.filter(e=>e.date===date);
             return <div key={date} className={`calendar-cell ${date.slice(0, 7) !== anchor.slice(0, 7) ? 'outside' : ''} ${date === today ? 'is-today' : ''}`} data-testid={`calendar-date-${date}`} {...dropProps(date)}>
-              <div className="calendar-cell-head"><button className="calendar-day-number" onClick={() => openDay(date)} title={`View ${formatDate(date)}`}>{Number(date.slice(-2))}</button><button className="calendar-cell-add" aria-label={`Add task on ${date}`} title="Add on this date" onClick={() => addAt(date)}><Plus size={15}/></button></div>
+              <div className="calendar-cell-head"><button type="button" className="calendar-select-date" aria-label={`Select ${date} for day copy`} aria-pressed={selectedDates.includes(date)} onClick={()=>{setSelectedDates(s=>s.includes(date)?s.filter(d=>d!==date):[...s,date].sort());setSelectionOpen(true);}} title="Select for copy/paste">▢</button><button className="calendar-day-number" onClick={() => openDay(date)} title={`View ${formatDate(date)}`}>{Number(date.slice(-2))}</button><button className="calendar-cell-add" aria-label={`Add task on ${date}`} title="Add on this date" onClick={() => addAt(date)}><Plus size={15}/></button></div>
               <div className="calendar-cell-entries">{plannedOnDate.slice(0,2).map(item=><button key={item.id} type="button" className="calendar-chip plan-calendar-chip" onClick={()=>openDay(date)} title="Open day planner">{item.title}</button>)}{tasksOnDate.slice(0, Math.max(0,3-plannedOnDate.length)).map(item => entry(item, true))}{tasksOnDate.length > 3 && <button className="calendar-more" onClick={() => openDay(date)}>+{tasksOnDate.length - 3} more</button>}</div>
             </div>;
           })}</div>
@@ -141,7 +153,7 @@ export function CalendarView({ board, planActions, tasks, completions, today, on
             })}</div>
           </button>;
         })}</div>}
-        <p className="calendar-footnote">Drag tasks between dates on desktop or edit a task's date on mobile. Moving a repeating task moves its whole series, not an individual occurrence. Removing it from the calendar keeps it on the task board.</p>
+        <p className="calendar-footnote">Click a date to open its planning window. Board tasks are reusable; each planned copy is independent. Use Copy / paste days to duplicate a single day or a multi-day routine. Original recurring due-date items are still editable separately.</p>
       </div>
       <aside className="calendar-unscheduled panel" aria-label="Unscheduled tasks">
         <div className="calendar-unscheduled-head"><div><span className="eyebrow">YOUR BACKLOG</span><h3>Unscheduled <span>{unscheduled.length}</span></h3></div><button className="icon-button" title="Add an unscheduled task" aria-label="Add unscheduled task" onClick={() => onEdit(null, 'urgent')}><Plus size={17}/></button></div>

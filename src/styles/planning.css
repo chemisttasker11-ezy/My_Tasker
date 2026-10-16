@@ -68,3 +68,21 @@
 @media(max-width:480px){.plan-day-grid{grid-template-columns:1fr}.plan-source-list{max-height:190px}.plan-workspace-title h2{font-size:21px}.plan-day-dialog{padding:12px}.plan-copy-guide{gap:7px}.plan-clipboard-actions .button{flex:1}}
 :root[data-theme='dark'] .plan-source-card,:root[data-theme='dark'] .plan-entry{background:#092b55}
 :root[data-theme='dark'] .plan-copy-guide strong{background:#064d39;color:#9dffd3}
+
+/* Calendar multi-day source and target picker. */
+.calendar-selection-add{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:15px 0}
+.calendar-selection-add label{display:grid;gap:5px;font-weight:800;font-size:12px}
+.calendar-selection-add input{border:1px solid var(--border);padding:8px 10px;min-height:44px;border-radius:9px;background:var(--input);color:var(--ink)}
+.calendar-date-selection{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.calendar-select-date{min-width:24px;min-height:29px;background:var(--soft-purple);color:var(--purple);border:1px solid var(--border);border-radius:6px;font-weight:900}
+.calendar-select-date[aria-pressed=true]{background:var(--sunny);color:#102a4b}
+.plan-day-dialog-head p{font-size:12px;color:var(--subtle);max-width:72ch;margin:5px 0 0}
+.week-intention{display:grid;gap:15px;padding:22px;border:2px solid var(--electric);background:var(--paper)}
+.week-intention h2{font-size:23px;margin:0 0 6px}.week-intention p{font-size:13px;margin:0;color:var(--subtle)}
+.week-intention form{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.week-intention label{display:grid;gap:5px;flex:1;min-width:160px;font-size:12px;font-weight:800}
+.week-intention label:first-child{flex:2}
+.week-intention input{width:100%;min-height:44px;padding:9px 12px;background:var(--input);color:var(--ink);border:1px solid var(--border);border-radius:10px}
+.week-capacity-summary{font-weight:800;color:var(--electric)!important}
+.plan-calendar-chip{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;background:#d4ffe6;color:#075c3c;font-size:11px;border:1px solid #12b86a;border-radius:6px;padding:4px 6px}
+@media(max-width:480px){.calendar-selection-add{display:grid;grid-template-columns:1fr}.plan-day-dialog-head h2{font-size:19px}}

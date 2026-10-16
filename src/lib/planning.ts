@@ -1,4 +1,4 @@
-import { brisbaneToday, generateId, type BoardState, type PlannedEntry, type Priority, type Subtask, type TaskStatus, type WeeklyPlan, type Task } from '../model';
+import { generateId, type BoardState, type PlannedEntry, type TaskStatus, type WeeklyPlan, type Task } from '../model';
 import { addDays, calendarOccurrences, mondayOf } from './calendar';
 
 /** DataTransfer contract shared across Today, Week, Calendar and the board palette. */
