@@ -1,9 +1,18 @@
 {
-  "name": "My Command Centre",
-  "short_name": "Command Centre",
+  "name": "My Tasker — Make Room for Life",
+  "short_name": "MyTasker",
+  "description": "Make confident plans, track meaningful progress, and make room for life.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f8f8fa",
-  "theme_color": "#383d92",
-  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+  "background_color": "#e8f2ff",
+  "theme_color": "#0759f5",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
 }

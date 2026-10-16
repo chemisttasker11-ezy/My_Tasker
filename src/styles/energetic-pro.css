@@ -1,0 +1,47 @@
+/* Energetic confidence system: saturated blue, bright citrus, green success and warm coral;
+   neutral ink is deliberate for WCAG contrast, not a muted grey visual identity. */
+:root{
+  --bg:#e8f2ff;--paper:#fff;--ink:#0a244b;--muted:#244f81;--subtle:#174477;
+  --border:#8fbcff;--sidebar:#082e80;--lane-bg:#dcebff;
+  --purple:#0759f5;--soft-purple:#d8e9ff;--focus-outline:#ed6f0d;
+  --electric:#0759f5;--lime:#00a95d;--tangerine:#e95520;--sunny:#ffd032;
+  --shadow:0 10px 22px rgba(6,57,150,.12);
+}
+:root[data-theme='dark']{
+  --bg:#041536;--paper:#0a2c62;--ink:#fff;--muted:#e3f0ff;--subtle:#c9e3ff;
+  --border:#2b7def;--sidebar:#04163d;--lane-bg:#0a2960;
+  --purple:#80b8ff;--soft-purple:#16448a;--focus-outline:#ffdc48;
+  --electric:#3984ff;--lime:#59ffb1;--tangerine:#ff9771;--sunny:#ffd74c;
+  --shadow:0 10px 28px rgba(0,8,30,.29)
+}
+body{font-family:'Nunito Sans',sans-serif;font-size:16px;line-height:1.5}
+h1,h2,h3,.plan-day-select{font-family:'Outfit',sans-serif}
+h1{font-weight:800;letter-spacing:-.025em}
+.button-primary,.top-add{background:#0759f5;border-color:#0759f5;color:white}
+.button-primary:hover,.top-add:hover{background:#0347c9}
+.overview-hero{background:linear-gradient(120deg,#032f9d 0%,#0759f5 65%,#1281ff 100%)}
+.overview-week-pulse{border:2px solid #0759f5;border-left:6px solid #00a95d}
+.weekly-meter-fill{background:linear-gradient(90deg,#0759f5,#00a95d)}
+.plan-day{border-top-width:6px}
+.plan-day-selected{outline-color:var(--electric)}
+.plan-source{border-color:var(--electric)}
+.plan-source-card button{background:#0759f5;color:#fff}
+:root[data-theme='dark'] .plan-source-card button{background:#195ce0;color:#fff}
+:root[data-theme='dark'] .plan-calendar-chip{background:#084e43;color:#b5ffe1}
+:root[data-theme='dark'] .plan-entry{background:#0c3973}
+:root[data-theme='dark'] .plan-day-dialog{background:var(--bg)}
+.plan-workspace .plan-source-card strong,.plan-workspace .plan-entry-title strong{font-size:13px}
+.plan-workspace .plan-source-card small,.plan-workspace .plan-entry-title small{font-size:12px}
+.plan-day-options label,.plan-day-options>span{font-size:12px}
+.plan-day-heading>strong{font-size:12px}
+.plan-source-card button,.plan-commit-toggle,.plan-entry-controls>button,.plan-order-actions>button{min-height:44px}
+.plan-focus-toggle{width:44px;height:44px}
+.plan-grip{min-width:40px;min-height:40px}
+.plan-entry-controls select{min-height:44px;font-size:12px}
+.plan-day-select{font-size:14px}
+.plan-workspace-title h2{font-size:26px}
+.plan-empty-day p{font-size:13px}
+@media (max-width:1100px){.plan-day-grid{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}}
+@media (max-width:780px){.plan-source-list{max-height:260px;overflow:auto}}
+@media (max-width:480px){.plan-day-grid{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.plan-workspace *{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}

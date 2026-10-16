@@ -1,4 +1,27 @@
-# Review and validation record
+# CURRENT VALIDATION EVIDENCE — 16 October 2026
+
+The historical handover/testing inventory below was collected before the planner, account and security enhancements. It is preserved for traceability, **not** as today's release status.
+
+Verified GitHub Actions: [run #38886300322](https://github.com/chemisttasker11-ezy/My_Tasker/actions/runs/38886300322) at **exact PR head `e17e04d`**, result **success** (7/7 independent jobs).
+
+| Gate | Evidence |
+| --- | --- |
+| TypeScript/Vite production build + Vitest | Passed; **48/48 unit tests** in 6 files |
+| Legacy/board-first planner Chromium | Passed; **23/23 browser tests** |
+| Real AuthGate browser UI with mocked provider transport | Passed; **4/4 browser tests**, including responsive admin layout |
+| Django SQLite migrations/auth/admin | Passed; **12/12 tests** |
+| Django PostgreSQL migrations/auth/admin | Passed; **12/12 tests** |
+| npm dependency security audit | Passed |
+| Actual production container | Passed Docker build, staging/production Compose validation, Django image checks and bundled React assets inspection |
+
+These are executed CI tests, not a claim that screenshots were manually accepted on all real devices or that production SMTP, reCAPTCHA, DNS, TLS, TOTP and database backups were verified on the real OVH host. Those **live-release gates remain open**.
+
+Developer changes were isolated to My_Tasker PR #1 and did not modify the ChemistTasker backend, original PR #180 or OVH service configuration.
+
+---
+
+## Historical source-extraction review (superseded)
+
 
 ## Handover snapshot — 16 October 2026
 

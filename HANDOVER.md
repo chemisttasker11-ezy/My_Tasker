@@ -1,4 +1,24 @@
-# My Tasker handover
+# CURRENT PR #1 STATUS — 16 October 2026
+
+This section supersedes the historical extraction handover below, which described a **pre-enhancement snapshot** and is retained only for history.
+
+- Architecture/acceptance checkpoint: `9d134f80706ae5f279ffde777ca26884faa55a3f`. [Acceptance workflow #38894751487](https://github.com/chemisttasker11-ezy/My_Tasker/actions/runs/38894751487) passed **all eight jobs** including actual React→Django→disposable PostgreSQL browser acceptance. Subsequent documentation and CI-ratchet changes must pass at their own exact head before release.
+- Board-first Today/Week planner, searchable source task picker, independent daily copies, drag/reorder, selected-day calendar copy/paste, five statuses and weekly weighted scoring are **implemented and tested**.
+- Dashboard/Today/Completed summaries include independent planned copies; quotes use chosen-day projection; Unicode SVG/PDF tracker includes planned entries.
+- Account signup/login/OTP/CAPTCHA, per-user PostgreSQL boards, revision-guarded autosave, backups, admin authenticator TOTP and user/audit dashboard are **implemented and tested with mocked external providers**. They are not verified live against SMTP or Google reCAPTCHA.
+- Separate OVH-style production and staging Docker Compose, private PostgreSQL volumes, same-origin React/Django container, dedicated env examples, `shared_backend_network` gateway snippets and backup-first deployment scripts have been written and passed Docker/Compose CI checks.
+- **Anti-spaghetti refactor:** `model.ts` and Django `views.py`/`admin_api.py` are backward-compatible import facades; owned frontend domain modules, persistence and planning hooks, task controller, navigation shell, weekly/calendar panels, admin panels and isolated CSS modules now carry the functionality. The 52 KB legacy stylesheet was partitioned with an exact concatenation check. CI ratchets file sizes, dependency direction, stage/production routing, Django SQLite/PostgreSQL, Docker and authenticated browser integration. See [architecture boundaries](docs/ARCHITECTURE_BOUNDARIES.md).
+- **Current automated counts:** 54 frontend unit tests; 23 planner browser, 6 auth browser, 2 real Django+PostgreSQL browser scenarios; 12 Django backend tests on each database; eight green jobs at the referenced checkpoint. Manual screenshots of responsive admin dashboard were reviewed and 320/375/390/768/1440 overflow was asserted; this does not replace testing all pages on physical devices.
+- **Crash recovery (new branch work):** signed-in unsent edits are journalled in an account-specific browser key and offered back after authenticated reload with explicit Restore/Download/Discard. Restore is refused if the PostgreSQL revision has advanced. The journal is cleared only after an exact server acknowledgement and is not encrypted at rest; see README privacy limits. Exact-head CI must validate the added recovery unit/browser/real PostgreSQL scenarios.
+- **Not completed:** live DNS/TLS/Nginx configuration on OVH; domain CAPTCHA credential registration; real SMTP OTP delivery; secure server env-file provisioning; cross-device/real-device checks on the deployed hostname; independent disaster-recovery restore rehearsal. Do not claim it is released to testers until these pass.
+- Keep PR #1 **draft** until deployment readiness and visual acceptance are confirmed. Do not merge to main or alter the ChemistTasker production stack without a release decision.
+
+See [README.md](README.md), [docs/OVH_DEPLOYMENT.md](docs/OVH_DEPLOYMENT.md) and [docs/SENIOR_PACKAGE_TESTING.md](docs/SENIOR_PACKAGE_TESTING.md).
+
+---
+
+## Historical 16 October extraction handover (superseded)
+
 
 **Prepared:** 16 October 2026, Australia/Brisbane.
 
