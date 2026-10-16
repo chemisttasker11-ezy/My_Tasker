@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
-import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, readState, rescheduleTask, saveTaskChanges, setTaskStatus, toggleCompletion, validateImported } from './model';
+import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, rescheduleTask, saveTaskChanges, setTaskStatus, toggleCompletion, validateImported } from './model';
 import { activeItem, downloadable, LANE_LABEL } from './lib/display';
 import { TaskModal } from './components/TaskModal';
 import { OverviewView } from './views/OverviewView';
@@ -51,7 +51,6 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'All'>('All');
   const [notice, setNotice] = useState('');
-  const [saveError, setSaveError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const day = brisbaneToday();
   const [trackerLaunch, setTrackerLaunch] = useState<TrackerLaunch>({ anchor: day, scale: 'day' });
