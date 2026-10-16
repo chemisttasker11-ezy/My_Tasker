@@ -2,7 +2,9 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
 import { createTaskController } from './controllers/taskController';
-import { type Category, type Lane, type Priority, type Task, type View, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
+import { type Category, type Lane, type Priority, type Task, type View, createTask, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
+import { addEntry } from './lib/planning';
+import type { ParsedQuickAdd } from './lib/quickAdd';
 import { downloadable } from './lib/display';
 import { projectBoardSummary } from './lib/boardSummary';
 import { TaskModal } from './components/TaskModal';
@@ -80,6 +82,16 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     if (!task) { showEditor(null, lane); return; }
     if (board.plannedEntries.some(entry => entry.id === task.id)) navigate('today');
     else showEditor(task);
+  }
+  function quickAdd(parsed: ParsedQuickAdd) {
+    if (!parsed.title) return;
+    setBoard(current => {
+      if (current.tasks.length >= 10000) return current;
+      const task = createTask({ title: parsed.title, priority: parsed.priority ?? 'medium', category: current.areas[0]?.id ?? 'Personal', lane: 'urgent', dueDate: parsed.due ?? day });
+      const next = { ...current, tasks: [...current.tasks, task] };
+      return addEntry(next, task.id, parsed.due ?? day);
+    });
+    alertNotice('Task added to your board and scheduled day');
   }
   function exportData() { downloadable(`my-command-centre-${day}.json`, JSON.stringify(board, null, 2)); alertNotice('Backup downloaded'); }
   function downloadRecoveredDraft(draftId: string) {
@@ -169,7 +181,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
         {view === 'tracker' && <Suspense fallback={<p role="status">Loading your tracker…</p>}><TrackerView board={board} launch={trackerLaunch}/></Suspense>}
         {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={openDailyTask} completed={completed} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore}/>}
         {view === 'board' && <BoardView visible={visible} search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} selectedLane={selectedLane} setSelectedLane={setSelectedLane} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask} moveTask={moveTask} archiveTask={archiveTask} duplicateTask={duplicateTask} changeStatus={changeStatus} toggleSubtask={toggleSubtask}/>}
-        {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={openDailyTask} toggleTask={toggleTask} allTasks={[...board.tasks, ...todayCopies]} completed={completed} focusIds={board.dailyFocus?.[day] ?? []} onFocus={chooseDailyFocus}/>}
+        {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={openDailyTask} toggleTask={toggleTask} toggleSubtask={toggleSubtask} onQuickAdd={quickAdd} allTasks={[...board.tasks, ...todayCopies]} completed={completed} focusIds={board.dailyFocus?.[day] ?? []} onFocus={chooseDailyFocus}/>}
         {view === 'week' && <WeekPlannerView board={board} planActions={planActions} onCapacity={setCapacity} today={day} navigate={navigate} onEdit={showEditor} onInclude={includeInWeek} onFocus={chooseDailyFocus} onReview={saveReview}/>}
         {view === 'calendar' && <CalendarView board={board} planActions={planActions} tasks={board.tasks} completions={board.completions} today={day} onEdit={showEditor} onDuplicate={duplicateTask} onStatus={changeStatus} onReschedule={rescheduleCalendarTask} onTracker={launch => { setTrackerLaunch(launch); navigate('tracker'); }}/>}
         {view === 'upcoming' && <UpcomingView active={active} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask}/>}
