@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Cloud, CircleHelp, DownloadCloud, LogOut, Trash2, ShieldCheck } from 'lucide-react';
 import { deleteAccount, type SignedInUser } from '../lib/authApi';
+import { purgeAccountDrafts } from '../lib/pendingDraftStore';
 
 export function AccountSettings({ account, signOut, showGuide, importLocal }: {
   account: SignedInUser; signOut:()=>Promise<void>; showGuide:()=>void; importLocal:()=>void;
@@ -13,7 +14,16 @@ export function AccountSettings({ account, signOut, showGuide, importLocal }: {
     event.preventDefault();
     if(!window.confirm('Permanently delete your My Tasker account, its task board, plans and history? This cannot be undone.')) return;
     setBusy(true);setError('');
-    try { await deleteAccount(password); window.location.reload(); }
+    try {
+      await deleteAccount(password);
+      try {
+        purgeAccountDrafts(account.id);
+        localStorage.removeItem(`mytasker-guide:${account.id}`);
+      } catch {
+        window.alert('Your server account was deleted, but this browser could not clear its local recovery drafts. Clear this site\'s browser data to erase them.');
+      }
+      window.location.reload();
+    }
     catch(err){setError(err instanceof Error?err.message:'Unable to delete account.');setBusy(false)}
   }
   return <section className="account-card panel" aria-label="My Tasker account">

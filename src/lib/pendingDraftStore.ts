@@ -67,6 +67,17 @@ export function savePendingDraft(
   return record;
 }
 
+/** An account deletion must also erase any local drafts, including malformed
+ * records not eligible for recovery. Do not enumerate drafts for other users.
+ */
+export function purgeAccountDrafts(userId: number, storage: Storage = localStorage): number {
+  const prefix = `${PREFIX}${userId}:`;
+  const keys = Array.from({length:storage.length},(_,i)=>storage.key(i))
+    .filter((key):key is string=>Boolean(key?.startsWith(prefix)));
+  keys.forEach(key=>storage.removeItem(key));
+  return keys.length;
+}
+
 export function removePendingDraft(userId: number, draftId: string, storage: Storage = localStorage): void {
   storage.removeItem(draftKey(userId, draftId));
 }

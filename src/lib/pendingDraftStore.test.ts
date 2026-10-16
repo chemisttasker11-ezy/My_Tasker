@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTask, initialState, validateImported } from '../model';
 import { createDraftId, draftKey, listPendingDrafts, pruneSavedDrafts,
-  rebasePendingDraft, removePendingDraft, savePendingDraft } from './pendingDraftStore';
+  rebasePendingDraft, removePendingDraft, savePendingDraft, purgeAccountDrafts } from './pendingDraftStore';
 
 class FakeStorage implements Storage {
   private readonly map = new Map<string,string>();
@@ -62,6 +62,15 @@ describe('private unsynced draft recovery adapter',()=>{
     storage.setItem(draftKey(12,other),'{ corrupt json');
     expect(listPendingDrafts(12,storage)).toHaveLength(0);
     expect(storage.getItem(draftKey(12,other))).toBe('{ corrupt json');
+  });
+  it('purges all account drafts on deletion, including invalid copies, without touching another account',()=>{
+    const storage=new FakeStorage();
+    savePendingDraft(12,first,0,initialState(),storage);
+    storage.setItem(draftKey(12,other),'{broken-local-json');
+    savePendingDraft(13,first,0,initialState(),storage);
+    expect(purgeAccountDrafts(12,storage)).toBe(2);
+    expect(listPendingDrafts(12,storage)).toHaveLength(0);
+    expect(listPendingDrafts(13,storage)).toHaveLength(1);
   });
   it('limits the draft to a predictable browser quota and uses unique tab IDs',()=>{
     const storage=new FakeStorage();
