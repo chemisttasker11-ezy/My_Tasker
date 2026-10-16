@@ -29,3 +29,20 @@ Reference branch: PR #2 `feature/my-planner-v1` at `2bd29646a526f86d16c405eb1690
 ## Notes
 - PR #2 remains open as the historical source until accepted features are in PR #3.
 - A feature is not counted delivered until wired through current auth-safe persistence and regression-tested.
+
+## Implemented on this branch (not yet production accepted)
+
+- Recurrence advancement for old anchors, overdue postponed tasks, retained historical score snapshots, cleaned stale focus IDs, selected-date recurring completion and Brisbane day rollover.
+- Data safety: import counts/confirmation and mandatory pre-import recovery snapshot, reject duplicated checklist IDs, preserve corrupt raw local board, render-error fallback with download/safe reset.
+- Focus mode extracted from PR #2, timer utilities and CSS; one-field quick capture with optional date/priority parser; planner-native Today Now card, timeline, current-time marker and gentle carry-over including back-to-board.
+- Conservative one-page PDF height safeguards, keeping PR #1 international-font raster fallback intact.
+- Reusable TaskModal keyboard focus containment and restoration.
+- Unit regression coverage for dated tasks, recurrence, stale focus, historical review and calendar occurrence.
+
+## Current review boundaries / still pending
+
+- Re-review latest head CI evidence (all jobs); review screenshots and accessibility on all breakpoints, especially the Focus overlay, QuickAdd and Now timeline.
+- Broader PR #2 standalone tests cannot be copied wholesale because its planned-entry shape differs from PR #1. Adapt only trustworthy tests.
+- Server/cloud persistence and concurrent-device tests must pass on the combined branch.
+- Fine polish including compact Calendar controls, visual alignment and any remaining PDF oversubscription behavior remains open.
+- No existing account data, PR #2 branch or main has been deliberately overwritten; do not merge until these remaining gates pass.
