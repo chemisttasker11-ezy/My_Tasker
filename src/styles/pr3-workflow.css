@@ -17,3 +17,6 @@
 .pr3-timeline-list li small { color: var(--muted, #34557c); }
 .pr3-timeline-list li button { min-height: 44px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border, #c2d7f4); background: var(--paper, white); color: var(--ink, #102c56); }
 @media (max-width: 560px) { .pr3-timeline-list li { grid-template-columns: 68px minmax(0,1fr); } .pr3-timeline-list li button { grid-column: 2; justify-self: start; } }
+
+.pr3-timeline-list li.pr3-now-line { border-bottom: 2px dashed var(--positive, #007965); color: var(--positive, #007965); font-weight: 800; padding: 7px 0; }
+.pr3-timeline-list li.pr3-now-line span { grid-column: 2 / -1; }
