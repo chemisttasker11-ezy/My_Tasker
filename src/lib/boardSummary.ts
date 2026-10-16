@@ -26,7 +26,7 @@ export function projectBoardSummary(board: BoardState, day: string) {
     brisbaneToday(new Date(isoDate)) === day;
   const doneToday = board.completions.filter(entry => isCompletedOn(entry.completedAt)).length +
     board.plannedEntries.filter(entry =>
-      entry.status === 'finished' && Boolean(entry.completedAt) && isCompletedOn(entry.completedAt)).length;
+      entry.status === 'finished' && !!entry.completedAt && isCompletedOn(entry.completedAt)).length;
 
   const goals = active.filter(task => task.lane === 'goals');
   const weekStart = mondayOf(day);
