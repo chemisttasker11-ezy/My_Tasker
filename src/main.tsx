@@ -12,6 +12,7 @@ import './styles/foundations.css';
 import './styles/weekly.css';
 import './styles/energy.css';
 import './styles/planning.css';
+import './styles/energetic-pro.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
