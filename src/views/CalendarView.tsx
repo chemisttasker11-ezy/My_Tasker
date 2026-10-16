@@ -87,7 +87,7 @@ export function CalendarView({ board, planActions, tasks, today, onEdit, onDupli
     <div className="calendar-filter-row">
       <label className="calendar-filter"><Search size={16}/><input aria-label="Search calendar tasks" placeholder="Find a scheduled task" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button aria-label="Clear calendar search" onClick={() => setSearch('')}><X size={15}/></button>}</label>
       <label className="calendar-filter-select">Area <select aria-label="Calendar category" value={category} onChange={e => setCategory(e.target.value as Category | 'All')}><option value="All">All areas</option>{areas.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}</select></label>
-      <span className="calendar-count">{occurrences.length} scheduled {occurrences.length === 1 ? 'occurrence' : 'occurrences'} shown</span>
+      <span className="calendar-count">{occurrences.length + plannedByDay.filter(e=>e.date>=range.start && e.date<=range.end).length} scheduled {occurrences.length + plannedByDay.filter(e=>e.date>=range.start && e.date<=range.end).length === 1 ? 'occurrence' : 'occurrences'} shown</span>
     </div>
     <div className="calendar-legend" aria-label="Task status legend">{STATUS_ORDER.map(status => <span key={status}><span className={`calendar-status-dot status-${status}`}/>{STATUS_LABEL[status]}</span>)}</div>
     <div className="calendar-layout">

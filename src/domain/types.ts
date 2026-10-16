@@ -82,6 +82,8 @@ export interface PlannedEntry {
   subtasks: Subtask[];
   createdAt: string;
   updatedAt: string;
+  /** Real completion moment, independent from which day this instance was planned for. */
+  completedAt?: string;
 }
 /** Planned entries are snapshots: source board tasks stay reusable and unchanged. */
 export interface BoardState {

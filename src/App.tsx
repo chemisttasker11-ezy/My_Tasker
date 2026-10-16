@@ -72,7 +72,8 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     (t.lane === 'daily' || t.lane === 'urgent' || (t.dueDate && t.dueDate <= day)));
   const todayTasks = [...todayCopies.filter(t => t.status !== 'postponed'), ...todayLegacy];
   const dayDoneHistory = board.completions.filter(c => brisbaneToday(new Date(c.completedAt)) === day).length;
-  const doneToday = dayDoneHistory + board.plannedEntries.filter(entry => entry.date === day && entry.status === 'finished').length;
+  const doneToday = dayDoneHistory + board.plannedEntries.filter(entry => entry.status === 'finished' && entry.completedAt &&
+    brisbaneToday(new Date(entry.completedAt)) === day).length;
   const goals = active.filter(t => t.lane === 'goals');
   const currentWeekStart = mondayOf(day);
   const currentWeekScore = useMemo(() => scoreWeek(board.weekPlans?.[currentWeekStart], board, currentWeekStart, day), [board, currentWeekStart, day]);

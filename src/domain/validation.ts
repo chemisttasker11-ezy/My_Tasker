@@ -133,7 +133,13 @@ export function validateImported(raw: unknown): BoardState {
       plannedEntries.push({ id: e.id, sourceTaskId: e.sourceTaskId, date: e.date, order: e.order,
         title: e.title, description: e.description, category: e.category, priority: e.priority,
         scheduledTime: e.scheduledTime, estimateMinutes: e.estimateMinutes, status: e.status,
-        subtasks, createdAt: e.createdAt.slice(0, 60), updatedAt: e.updatedAt.slice(0, 60) });
+        subtasks, createdAt: e.createdAt.slice(0, 60), updatedAt: e.updatedAt.slice(0, 60),
+        // Older backups had no completion timestamp; migrate from the last update
+        // only when the copy was marked finished. New copies record the exact event.
+        completedAt: e.status === 'finished'
+          ? (typeof e.completedAt === 'string' && !Number.isNaN(Date.parse(e.completedAt))
+              ? e.completedAt.slice(0, 60) : e.updatedAt.slice(0, 60))
+          : '' });
     }
   }
   return { version: 1, tasks, completions, plannedEntries, weekPlans, dailyFocus, areas,

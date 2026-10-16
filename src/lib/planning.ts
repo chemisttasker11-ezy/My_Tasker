@@ -19,7 +19,7 @@ function snapshot(source: Pick<PlannedEntry, 'sourceTaskId' | 'title' | 'descrip
     title: source.title, description: source.description, category: source.category, priority: source.priority,
     scheduledTime: source.scheduledTime, estimateMinutes: source.estimateMinutes,
     status: 'not-started', subtasks: source.subtasks.map(st => ({ id: generateId(), title: st.title, done: false })),
-    createdAt: now.toISOString(), updatedAt: now.toISOString()
+    createdAt: now.toISOString(), updatedAt: now.toISOString(), completedAt: ''
   };
 }
 function fromTask(t: Task) {
@@ -69,8 +69,7 @@ export function moveEntry(state: BoardState, id: string, toDate: string, toIndex
 }
 export function setEntryStatus(state: BoardState, id: string, status: TaskStatus, now = new Date()): BoardState {
   if (!['not-started', 'started', 'progressing', 'finished', 'postponed'].includes(status)) return state;
-  return { ...state, plannedEntries: state.plannedEntries.map(e =>
-    e.id === id ? { ...e, status, updatedAt: now.toISOString() } : e) };
+  return editEntry(state, id, { status }, now);
 }
 export function editEntry(state: BoardState, id: string, patch: Partial<Pick<PlannedEntry, 'title' | 'description' | 'scheduledTime' | 'estimateMinutes' | 'priority' | 'status' | 'subtasks'>>, now = new Date()): BoardState {
   const old = state.plannedEntries.find(e => e.id === id);
@@ -83,7 +82,11 @@ export function editEntry(state: BoardState, id: string, patch: Partial<Pick<Pla
     !Number.isInteger(merged.estimateMinutes) || merged.estimateMinutes < 0 || merged.estimateMinutes > 100000 ||
     !Array.isArray(merged.subtasks) || merged.subtasks.length > 100 ||
     merged.subtasks.some(st => !st.id || !st.title.trim() || st.title.length > 250)) return state;
-  return { ...state, plannedEntries: state.plannedEntries.map(e => e.id === id ? { ...merged, updatedAt: now.toISOString() } : e) };
+  const completedAt = merged.status === 'finished'
+    ? (old.status === 'finished' ? (old.completedAt || old.updatedAt) : now.toISOString())
+    : '';
+  return { ...state, plannedEntries: state.plannedEntries.map(e =>
+    e.id === id ? { ...merged, completedAt, updatedAt: now.toISOString() } : e) };
 }
 export function toggleEntryStep(state: BoardState, id: string, stepId: string, now = new Date()): BoardState {
   const entry = state.plannedEntries.find(e => e.id === id);

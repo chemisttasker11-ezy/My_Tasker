@@ -78,3 +78,34 @@ describe('independent board-to-day planning', () => {
     expect(parseDragPayload('board:<script>')).toBeNull();
   });
 });
+
+describe('actual completion timestamps for independent planned copies', () => {
+  it('records the real completion instant, preserves it on edits, clears it on reopening', () => {
+    const task=createTask({title:'Timed work'});
+    const created=new Date('2026-10-12T09:00:00Z');
+    const finished=new Date('2026-10-16T01:00:00Z');
+    const edited=new Date('2026-10-17T03:00:00Z');
+    let board=addEntry({...initialState(),tasks:[task]},task.id,'2026-10-21',created);
+    const id=board.plannedEntries[0].id;
+    board=setEntryStatus(board,id,'finished',finished);
+    expect(board.plannedEntries[0].completedAt).toBe(finished.toISOString());
+    expect(board.plannedEntries[0].date).toBe('2026-10-21');
+    board=editEntry(board,id,{title:'Updated title'},edited);
+    expect(board.plannedEntries[0].completedAt).toBe(finished.toISOString());
+    board=setEntryStatus(board,id,'started',edited);
+    expect(board.plannedEntries[0].completedAt).toBe('');
+    board=setEntryStatus(board,id,'finished',edited);
+    expect(board.plannedEntries[0].completedAt).toBe(edited.toISOString());
+  });
+  it('imports legacy finished planned copies without corrupting backup version', () => {
+    const task=createTask({title:'Legacy'});
+    const original=addEntry({...initialState(),tasks:[task]},task.id,monday);
+    const previous={...original.plannedEntries[0],status:'finished' as const};
+    const {completedAt: _unused, ...legacy}=previous;
+    void _unused;
+    const restored=validateImported({...original,plannedEntries:[legacy]});
+    expect(restored.version).toBe(1);
+    expect(restored.plannedEntries[0].completedAt).toBe(legacy.updatedAt);
+    expect(restored.plannedEntries[0].status).toBe('finished');
+  });
+});

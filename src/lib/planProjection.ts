@@ -27,7 +27,7 @@ export function taskForPlanned(entry: PlannedEntry, source?: Task): Task {
     recurrence: 'none', estimateMinutes: entry.estimateMinutes,
     subtasks: entry.subtasks, status: entry.status,
     createdAt: entry.createdAt, updatedAt: entry.updatedAt,
-    completedAt: entry.status === 'finished' ? entry.updatedAt : '', archivedAt: '',
+    completedAt: entry.status === 'finished' ? (entry.completedAt || entry.updatedAt) : '', archivedAt: '',
     origin: source?.origin ?? 'personal'
   };
 }

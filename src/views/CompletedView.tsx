@@ -8,7 +8,8 @@ interface Props {
 }
 
 export function CompletedView({ board, day, showEditor, navigate, toggleTask }: Props) {
-  const finishedCopies = [...board.plannedEntries].filter(e => e.status === 'finished').sort((a,b) => b.date.localeCompare(a.date));
+  const finishedCopies = [...board.plannedEntries].filter(e => e.status === 'finished').sort((a,b) =>
+    (b.completedAt || b.updatedAt).localeCompare(a.completedAt || a.updatedAt));
   return <>
           <div className="page-title-row"><div><span className="eyebrow">LOOK HOW FAR YOU'VE COME</span><h1>Completed tasks <span className="heading-sparkle">✓</span></h1><p>Your completion history, including individual recurring-task check-ins.</p></div></div>
           <div className="completed-banner"><CheckCircle2 size={25}/><div><strong>{board.completions.length + finishedCopies.length} completed tasks</strong><p>Consistency counts, even when a task repeats.</p></div></div>
@@ -16,7 +17,7 @@ export function CompletedView({ board, day, showEditor, navigate, toggleTask }: 
             <h2>Finished in daily plans</h2>
             {finishedCopies.map(entry=><div className="history-row" key={entry.id}>
               <span className="history-check"><Check size={17}/></span>
-              <div><strong>{entry.title}</strong><small>{entry.category} · Planned for {entry.date}</small></div>
+              <div><strong>{entry.title}</strong><small>{entry.category} · Completed {new Intl.DateTimeFormat('en-AU', {dateStyle:'medium',timeStyle:'short',timeZone:'Australia/Brisbane'}).format(new Date(entry.completedAt || entry.updatedAt))} · Planned for {entry.date}</small></div>
               <button className="text-link" type="button" onClick={() => navigate('today')}>Open day planner <ChevronRight size={15}/></button>
             </div>)}
           </section>}
