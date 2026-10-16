@@ -43,7 +43,15 @@ export function AuthPage({ onAuthenticated, captchaKey }: {onAuthenticated:(resu
       else if(page==='signup'){
         if(password!==confirm)throw Error('Passwords do not match.');
         if(!captcha)throw Error('Complete the CAPTCHA to continue.');
-        await api.signup(email,password,captcha);go('verify');setMessage('We sent a six-digit code to your inbox. It expires in 10 minutes.');
+        try {
+          await api.signup(email,password,captcha);
+          go('verify');
+          setMessage('We sent a six-digit code to your inbox. It expires in 10 minutes.');
+        } catch (failure) {
+          if(failure instanceof api.ApiError && failure.status === 409) {
+            setMessage('If this is your account, use Log in. If you still need to verify your email, choose Verify email below; a new code can be requested.');
+          } else throw failure;
+        }
       }else if(page==='verify'){
         await api.verifyOtp(email,otp);go('login');setMessage('Email verified. You can now log in.');
       }else if(page==='forgot'){
@@ -91,9 +99,9 @@ export function AuthPage({ onAuthenticated, captchaKey }: {onAuthenticated:(resu
           <button className="auth-primary" type="submit" disabled={busy || (page==='signup'&&(!captchaKey||!captcha))}>{busy?'Working…':page==='login'?'Log in':page==='signup'?'Create account':page==='verify'?'Verify email':page==='forgot'?'Send recovery code':'Update password'} <ArrowRight size={19}/></button>
         </form>
         <div className="auth-links">
-          {page==='login'&&<><button type="button" onClick={()=>go('signup')}>New here? <strong>Sign up</strong></button><button type="button" onClick={()=>go('forgot')}>Forgot password?</button></>}
-          {page==='signup'&&<button type="button" onClick={()=>go('login')}>Already have an account? <strong>Log in</strong></button>}
-          {page==='verify'&&<><button disabled={busy} type="button" onClick={()=>{setBusy(true);void api.resendOtp(email).then(x=>setMessage(x.detail)).catch(err=>setError(err instanceof Error?err.message:'Please retry')).finally(()=>setBusy(false))}}>Resend code</button><button type="button" onClick={()=>go('login')}>Back to login</button></>}
+          {page==='login'&&<><button type="button" onClick={()=>go('signup')}>New here? <strong>Sign up</strong></button><button type="button" onClick={()=>go('verify')}>Verify email / resend code</button><button type="button" onClick={()=>go('forgot')}>Forgot password?</button></>}
+          {page==='signup'&&<><button type="button" onClick={()=>go('login')}>Already have an account? <strong>Log in</strong></button><button type="button" onClick={()=>go('verify')}>Verify email / resend code</button></>}
+          {page==='verify'&&<><button disabled={busy||!/^\S+@\S+\.\S+$/.test(email)} type="button" onClick={()=>{setBusy(true);setError('');setMessage('');void api.resendOtp(email).then(x=>setMessage(x.detail)).catch(err=>setError(err instanceof Error?err.message:'Please retry')).finally(()=>setBusy(false))}}>Resend code</button><button type="button" onClick={()=>go('login')}>Back to login</button></>}
           {(page==='forgot'||page==='reset')&&<button type="button" onClick={()=>go('login')}>Back to login</button>}
         </div>
         <div className="auth-quick-guide"><h3>How it works</h3><div><span>1. Build your task board</span><span>2. Drag copies into your week</span><span>3. Set your daily top three</span><span>4. Track wins and review</span></div><p>Your planner syncs to your account across devices. Avoid storing identifiable patient information.</p></div>

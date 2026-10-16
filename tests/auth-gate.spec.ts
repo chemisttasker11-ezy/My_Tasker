@@ -35,6 +35,7 @@ async function stubAPI(page:Page,mode:Mode) {
     }
     if(path==='/api/auth/signup/'){
       if(!body.captcha_token)return json({detail:'CAPTCHA required'},400);
+      if(body.email==='existing@example.test')return json({detail:'This email already has an account.'},409);
       return json({detail:'Check your inbox for the six-digit code.'},201);
     }
     if(path==='/api/auth/verify-otp/'){verifiedEmail=true;return json({detail:'Email verified.'});}
@@ -77,6 +78,31 @@ test.describe('@auth-gate authenticated app acceptance',()=>{
     await expect(page.getByRole('heading',{name:'Make this week yours.'})).toBeVisible();
     await page.getByRole('button',{name:'Open week planner'}).click();
     await expect(page.getByRole('heading',{name:'Plan your week'})).toBeVisible();
+  });
+  test('unverified signup can resume after closing the page without recreating the account',async({page})=>{
+    await stubAPI(page,'user');
+    await page.goto('/');
+    await page.getByRole('button',{name:'Verify email / resend code'}).click();
+    await expect(page.getByRole('heading',{name:'Check your inbox'})).toBeVisible();
+    await page.getByRole('textbox',{name:'Email address'}).fill('existing@example.test');
+    await page.getByRole('button',{name:'Resend code'}).click();
+    await expect(page.getByRole('status')).toContainText('Verification code resent.');
+    await page.getByRole('textbox',{name:'Six-digit email code'}).fill('654321');
+    await page.getByRole('button',{name:'Verify email'}).click();
+    await expect(page.getByRole('heading',{name:'Welcome back'})).toBeVisible();
+  });
+  test('duplicate signup offers a safe existing-account verification path',async({page})=>{
+    await stubAPI(page,'user');
+    await page.goto('/');
+    await page.getByRole('button',{name:/Sign up/}).click();
+    await page.getByRole('textbox',{name:'Email address'}).fill('existing@example.test');
+    await page.getByLabel('Password (12+ characters)').fill('AnotherExampleSecure#2026');
+    await page.getByLabel('Confirm password').fill('AnotherExampleSecure#2026');
+    await page.getByRole('button',{name:/Create account/}).click();
+    await expect(page.getByText(/If this is your account, use Log in/)).toBeVisible();
+    await page.getByRole('button',{name:'Verify email / resend code'}).click();
+    await expect(page.getByRole('textbox',{name:'Email address'})).toHaveValue('existing@example.test');
+    await expect(page.getByRole('button',{name:'Resend code'})).toBeEnabled();
   });
   test('administrator password requires authenticator before dashboard access',async({page})=>{
     await stubAPI(page,'admin-enrolled');
