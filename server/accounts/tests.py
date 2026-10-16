@@ -23,7 +23,7 @@ class AccountAcceptance(TestCase):
                            HTTP_X_CSRFTOKEN=self.c.cookies["csrftoken"].value)
 
     def register(self,email="alice@example.test"):
-        with patch("accounts.views.captcha_valid", return_value=True):
+        with patch("accounts.auth_api.captcha_valid", return_value=True):
             r=self.post("/api/auth/signup/",{"email":email,"password":"SafePassword#2026","captcha_token":"test-captcha"})
         self.assertEqual(r.status_code,201,r.content)
         user=User.objects.get(username=email)

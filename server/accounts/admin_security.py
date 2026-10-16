@@ -18,7 +18,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from .models import AdminAudit, AdminSecurity, UserSessionStamp
-from .views import request_ip
+from .security import request_ip
 
 User = get_user_model()
 MFA_SESSION_SECONDS = 12 * 60 * 60

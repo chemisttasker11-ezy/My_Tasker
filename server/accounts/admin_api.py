@@ -11,7 +11,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 from .models import AdminAudit, AdminSecurity, UserBoard, UserSessionStamp, VerifiedEmail
-from .views import limited_ip, limit, payload, respond_error
+from .security import limited_ip, limit, payload, respond_error
 from .admin_security import (
     audit_event, authorised_staff, decrypted, encrypted, login_with_mfa,
     new_backup_codes, pending_staff, qr_for_uri, totp_step, accept_otp,
