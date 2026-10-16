@@ -1,4 +1,4 @@
-import type { BoardState, Category, Lane, Recurrence, Task } from './types';
+import type { BoardState, Category, Lane, Priority, Recurrence, Task } from './types';
 import { CATEGORIES } from './constants';
 import { generateId } from './time';
 const DEFAULT_RECURRENCE: Record<Lane, Recurrence> = {
