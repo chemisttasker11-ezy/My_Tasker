@@ -23,9 +23,11 @@ import {
   KeyboardSensor,
   PointerSensor,
   closestCorners,
+  defaultAnnouncements,
   pointerWithin,
   useSensor,
   useSensors,
+  type Announcements,
   type CollisionDetection,
   type KeyboardCoordinateGetter,
   type DragEndEvent,
@@ -508,20 +510,26 @@ export function WeekPlannerView({
 
   // DnD state
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  // Sensor events can arrive before React commits the previous collision. Keep
+  // keyboard intent independent of `over`, including when Space immediately drops.
+  const keyboardTargetDate = useRef<string | null>(null);
 
   const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
     if (args.context.active?.data.current?.type !== 'picker-task') return sortableKeyboardCoordinates(event, args);
     const direction = ['ArrowLeft', 'ArrowUp'].includes(event.code) ? -1 : ['ArrowRight', 'ArrowDown'].includes(event.code) ? 1 : 0;
     if (!direction) return;
     event.preventDefault();
-    const currentDate = args.context.over?.data.current?.date ?? args.context.over?.data.current?.entry?.date;
+    const currentDate = keyboardTargetDate.current ?? args.context.over?.data.current?.date ?? args.context.over?.data.current?.entry?.date;
     const current = days.indexOf(currentDate);
     const index = current < 0 ? (direction < 0 ? days.length - 1 : 0) : Math.max(0, Math.min(days.length - 1, current + direction));
     const rect = args.context.droppableRects.get(`day-plan-${days[index]}`);
-    if (rect && args.context.collisionRect) return {
-      x: rect.left + rect.width / 2 - args.context.collisionRect.width / 2,
-      y: rect.top + rect.height / 2 - args.context.collisionRect.height / 2
-    };
+    if (rect && args.context.collisionRect) {
+      keyboardTargetDate.current = days[index];
+      return {
+        x: rect.left + rect.width / 2 - args.context.collisionRect.width / 2,
+        y: rect.top + rect.height / 2 - args.context.collisionRect.height / 2
+      };
+    }
   };
 
   const sensors = useSensors(
@@ -530,6 +538,10 @@ export function WeekPlannerView({
   );
 
   const collisionDetection: CollisionDetection = args => {
+    if (args.active.data.current?.type === 'picker-task' && keyboardTargetDate.current) {
+      const target = args.droppableContainers.find(container => container.id === `day-plan-${keyboardTargetDate.current}`);
+      if (target) return [{ id: target.id }];
+    }
     const pointers = pointerWithin(args);
     if (pointers.length) {
       const entryTargets = pointers.filter(
@@ -540,22 +552,37 @@ export function WeekPlannerView({
     return closestCorners(args);
   };
 
+  const announcements: Announcements = {
+    ...defaultAnnouncements,
+    onDragEnd: event => {
+      const date = keyboardTargetDate.current;
+      return date
+        ? `${event.active.data.current?.task?.title ?? 'Task'} added to ${DAYS[days.indexOf(date)]} (${formatDate(date)}).`
+        : defaultAnnouncements.onDragEnd(event);
+    }
+  };
+
   const handleDragStart = ({ active }: DragStartEvent) => {
+    keyboardTargetDate.current = null;
     setDraggingId(String(active.id));
   };
 
   const handleDragCancel = () => {
+    keyboardTargetDate.current = null;
     setDraggingId(null);
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     setDraggingId(null);
-    if (!over) return;
+    // Retain the final intent for the end announcement; the next start/cancel
+    // resets it. dnd-kit's `over` can still describe the preceding render here.
+    const keyboardDate = keyboardTargetDate.current;
+    if (!over && !keyboardDate) return;
 
     const activeIdStr = String(active.id);
-    const overIdStr = String(over.id);
+    const overIdStr = String(over?.id ?? '');
     const activeData = active.data.current;
-    const overData = over.data.current;
+    const overData = over?.data.current;
 
     // Helper to resolve target date from droppable or entry id
     const resolveTargetDate = (): string | null => {
@@ -594,7 +621,7 @@ export function WeekPlannerView({
         }
       }
 
-      const targetDate = resolveTargetDate();
+      const targetDate = keyboardDate ?? resolveTargetDate();
       if (taskId && targetDate && validISODate(targetDate)) {
         setBoard(b => planTask(b, taskId, targetDate));
       }
@@ -800,6 +827,7 @@ export function WeekPlannerView({
         </div>
 
         <DndContext
+          accessibility={{ announcements }}
           sensors={sensors}
           collisionDetection={collisionDetection}
           onDragStart={handleDragStart}

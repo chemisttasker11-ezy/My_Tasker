@@ -421,10 +421,26 @@ test('picker keyboard drag targets a day without changing the source', async ({ 
   const handle = page.getByTestId('picker-row-task-1').getByRole('button', { name: /Drag/ });
   await handle.focus();
   await page.keyboard.press('Space');
+  // Activation and the first collision confirm that the overlay and measured
+  // droppables are ready; key input itself does not wait for either.
+  await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.planner-drag-preview')).toBeVisible();
+  await expect(page.locator('.week-planning-days-grid .day-plan-container.is-over')).toHaveCount(1);
   for (let i = 0; i < 8; i++) await page.keyboard.press('ArrowLeft');
-  await page.keyboard.press('ArrowRight');
-  await page.keyboard.press('Space');
+  await expect(page.getByTestId(`day-plan-${dates[0]}`)).toHaveClass(/is-over/);
+  // Navigate and drop within one browser task, before React can commit `over`.
+  // Monday -> Tuesday -> Wednesday -> Tuesday must count every key press.
+  await page.evaluate(() => {
+    for (const code of ['ArrowRight', 'ArrowRight', 'ArrowLeft', 'Space']) {
+      const key = code === 'Space' ? ' ' : code;
+      document.dispatchEvent(new KeyboardEvent('keydown', { code, key, bubbles: true, cancelable: true }));
+      document.dispatchEvent(new KeyboardEvent('keyup', { code, key, bubbles: true, cancelable: true }));
+    }
+  });
   await expect(page.getByTestId(`day-plan-${dates[1]}`)).toContainText('Tax invoice review');
+  await expect(page.locator('.week-planning-days-grid .planned-entry-card')).toHaveCount(1);
+  await expect(handle).not.toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[id^="DndLiveRegion-"]')).toContainText('Tax invoice review added to Tuesday');
   const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), STORAGE_KEY);
   expect(saved.tasks).toEqual(originalTasks);
 });
