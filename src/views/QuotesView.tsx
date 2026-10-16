@@ -1,15 +1,16 @@
 import { useState } from 'react';
-import { dailyQuote, QUOTE_LIBRARY, quoteSettings, type QuoteSettings } from '../lib/quotes';
-import { generateId, type Task } from '../model';
+import { dailyQuote, QUOTE_LIBRARY, quoteSettings, relevantTasksForDate, type QuoteSettings } from '../lib/quotes';
+import { generateId, type BoardState, type Task } from '../model';
 
-export function QuotesView({ value, today, tasks, onChange }: { value?: QuoteSettings; today: string; tasks: Task[]; onChange: (q: QuoteSettings) => void }) {
+export function QuotesView({ value, today, tasks, board, onChange }: { value?: QuoteSettings; today: string; tasks?: Task[]; board?: BoardState; onChange: (q: QuoteSettings) => void }) {
   const q = quoteSettings(value);
   const [direction, setDirection] = useState(q.direction);
   const [date, setDate] = useState(today);
   const [draft, setDraft] = useState('');
   const [theme, setTheme] = useState('All');
   const [notice, setNotice] = useState('');
-  const quote = dailyQuote(q, date, tasks);
+  const relevantTasks = board ? relevantTasksForDate(board, date) : (tasks ?? []);
+  const quote = dailyQuote(q, date, relevantTasks);
   const quotes = [...q.custom, ...QUOTE_LIBRARY].filter(item => theme === 'All' || item.theme === theme);
   return <>
     <div className="page-title-row"><div><span className="eyebrow">WORDS TO COME BACK TO</span><h1>Your direction & daily quotes</h1><p>A reminder of what matters, alongside a little encouragement for the day.</p></div></div>
