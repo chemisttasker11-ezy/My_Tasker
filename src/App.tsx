@@ -52,7 +52,6 @@ export default function App() {
     if (next === current) { if (!callbacks) setNotice('No change was saved. The selection may be unavailable or a board limit has been reached.'); return; }
     const warnings: string[] = [];
     try { validateImported(next, warnings); } catch (err) { setNotice(err instanceof Error ? err.message : 'Invalid change'); return; }
-    if (warnings.length) { setNotice(`Change not saved: ${warnings.join(' ')}`); return; }
     const observedRevision = externalRevision.current;
     boardRef.enqueue(next, async () => {
       const apply = (): BoardState | undefined => {
@@ -65,6 +64,7 @@ export default function App() {
         try {
           const saved = writeBoard(rawRef.current, next);
           dirtyRef.current = false; rawRef.current = saved.raw; setSaveError(false); callbacks?.onApplied();
+          if (saved.warnings.length) setNotice(saved.warnings.join(' '));
           return saved.board;
         } catch (error) {
           if (error instanceof Error && error.message === 'conflict') {
@@ -168,7 +168,6 @@ export default function App() {
       const warnings: string[] = [];
       try { validateImported({ ...current, tasks: current.tasks.some(t => t.id === task.id) ? current.tasks.map(t => t.id === task.id ? task : t) : [...current.tasks, task] }, warnings); }
       catch (err) { alertNotice(err instanceof Error ? err.message : 'Task could not be saved'); return current; }
-      if (warnings.length) { alertNotice('Task could not be saved: ' + warnings.join(' ')); return current; }
       return saveTaskChanges(current, task);
     }, {
       onApplied: () => { closeEditor(); alertNotice('Task saved'); },

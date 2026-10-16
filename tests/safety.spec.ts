@@ -110,6 +110,13 @@ for (const choice of ['Use mine', 'Keep theirs'] as const) {
     const conflict = page.getByRole('dialog', { name: 'This task changed in another tab', exact: true });
     await expect(conflict).toBeVisible();
     await expect(conflict).toContainText('My preserved draft');
+    const keepTheirs = conflict.getByRole('button', { name: 'Keep theirs', exact: true });
+    const useMine = conflict.getByRole('button', { name: 'Use mine', exact: true });
+    await expect(keepTheirs).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(useMine).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(keepTheirs).toBeFocused();
     expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!).tasks[0].title, STORAGE_KEY)).toBe('Their task edit');
     await page.keyboard.press('Escape');
     await expect(conflict).toBeVisible();

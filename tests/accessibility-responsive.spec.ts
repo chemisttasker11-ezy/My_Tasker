@@ -101,7 +101,10 @@ test.describe('Mobile header button (DC-7)', () => {
 
 test.describe('TaskBoard card keyboard lane move alternative', () => {
   test('card menu provides "Move to lane..." options and closes with Esc', async ({ page }) => {
-    await page.getByRole('button', { name: 'My task board' }).click();
+    await page.getByRole('button', { name: 'New task', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Task name', exact: true }).fill('Tax');
+    await page.getByRole('button', { name: 'Create task', exact: true }).click();
+    await page.getByRole('navigation').getByRole('button', { name: 'My task board', exact: true }).click();
     const moreBtn = page.getByRole('button', { name: 'More options for Tax' });
     await moreBtn.click();
 
@@ -144,9 +147,9 @@ test.describe('Responsive horizontal overflow (DC-6 & all views)', () => {
 
         if (vp.width <= 720) {
           await page.getByRole('button', { name: 'Open menu' }).click();
-          await page.getByRole('button', { name: v.name }).click();
+          await page.getByRole('navigation').getByRole('button', { name: v.name }).click();
         } else {
-          await page.getByRole('button', { name: v.name }).click();
+          await page.getByRole('navigation').getByRole('button', { name: v.name }).click();
         }
 
         await page.waitForTimeout(100);

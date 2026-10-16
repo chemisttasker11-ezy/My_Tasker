@@ -276,7 +276,7 @@ export function taskEditConflicts(snapshot: TaskEditSnapshot, current: BoardStat
 
 /** Save modal changes, without creating fake completions or losing existing history. */
 export function saveTaskChanges(state: BoardState, draft: Task, now = new Date()): BoardState {
-  if (draft.subtasks.length > LIMITS.checklist || draft.title.length > 250 || draft.description.length > 10000) return state;
+  if (draft.title.length > 250 || draft.description.length > 10000) return state;
   const prior = state.tasks.find(t => t.id === draft.id);
   if (!prior && state.tasks.length >= LIMITS.tasks) return state;
   const status = draft.status;
@@ -402,17 +402,17 @@ export function readState(): BoardState {
   return loaded.board;
 }
 /** Called inside the app's cross-tab Web Lock. Compare raw as well as revisions for legacy tabs. */
-export function writeBoard(expected: string | null, next: BoardState, storage: Storage = localStorage): { board: BoardState; raw: string } {
+export function writeBoard(expected: string | null, next: BoardState, storage: Storage = localStorage): { board: BoardState; raw: string; warnings: string[] } {
   const current = storage.getItem(STORAGE_KEY);
   if (current !== expected) throw new Error('conflict');
   const warnings: string[] = [];
   const board = validateImported(next, warnings);
-  if (warnings.length) throw new Error(`Board limit reached: ${warnings.join(' ')}`);
+  if (warnings.length) preserveRaw(JSON.stringify(next), 'recovery', storage);
   board.revision = (expected ? validateImported(JSON.parse(expected)).revision ?? 0 : 0) + 1;
   if (expected && JSON.stringify(validateImported(JSON.parse(expected))) !== expected) preserveRaw(expected, 'backup', storage);
   const raw = JSON.stringify(board);
   storage.setItem(STORAGE_KEY, raw);
-  return { board, raw };
+  return { board, raw, warnings };
 }
 function validTimestamp(value: unknown): boolean {
   return value === undefined || value === '' || (typeof value === 'string' && Number.isFinite(Date.parse(value)));

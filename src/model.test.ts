@@ -211,7 +211,10 @@ describe('board safety and additive migration', () => {
   it('enforces checklist and collection limits while editing', () => {
     const state = emptyState(); const task = createTask({ title: 'Checklist' }); state.tasks = [task];
     const draft = { ...task, subtasks: Array.from({ length: 101 }, (_, i) => ({ id: `${i}`, title: 'Step', done: false })) };
-    expect(saveTaskChanges(state, draft)).toBe(state);
+    const storage = memoryStorage();
+    const saved = writeBoard(null, saveTaskChanges(state, draft), storage);
+    expect(saved.board.tasks[0].subtasks).toHaveLength(LIMITS.checklist);
+    expect(saved.warnings.length).toBeGreaterThan(0);
     state.tasks = Array.from({ length: LIMITS.tasks }, (_, i) => ({ ...task, id: `${i}` }));
     expect(saveTaskChanges(state, { ...task, id: 'new' })).toBe(state);
     state.dailyFocus = Object.fromEntries(Array.from({ length: LIMITS.focusDates }, (_, i) => [`old${i}`, []]));
@@ -390,5 +393,35 @@ describe('immediate same-tab updates with serialized persistence', () => {
     expect(rejected).toBe(true);
     expect(rendered).toEqual(theirs.board);
     expect(storage.getItem(STORAGE_KEY)).toBe(theirs.raw);
+  });
+});
+
+
+describe('recoverable over-limit saves', () => {
+  it('saves unrelated edits and a trimmed checklist while preserving the untrimmed next board', () => {
+    const storage = memoryStorage(); const initial = writeBoard(null, emptyState(), storage);
+    const next = { ...initial.board, theme: 'dark' as const, weeklyScoreEnabled: true, tasks: [createTask({
+      title: 'Keep my title edit', subtasks: Array.from({ length: 101 }, (_, i) => ({ id: `s${i}`, title: `Step ${i}`, done: false }))
+    })] };
+    const saved = writeBoard(initial.raw, next, storage);
+    expect(saved.board).toMatchObject({ theme: 'dark', weeklyScoreEnabled: true, revision: 2 });
+    expect(saved.board.tasks[0].title).toBe('Keep my title edit');
+    expect(saved.board.tasks[0].subtasks).toHaveLength(100);
+    expect(saved.warnings.join(' ')).toContain('Checklist');
+    const keys = Array.from({ length: storage.length }, (_, i) => storage.key(i)!);
+    const recovery = keys.find(key => key.startsWith(`${STORAGE_KEY}:recovery-`))!;
+    expect(storage.getItem(recovery)).toBe(JSON.stringify(next));
+    expect(JSON.parse(storage.getItem(recovery)!).tasks[0].subtasks).toHaveLength(101);
+    const later = writeBoard(saved.raw, { ...saved.board, theme: 'light' }, storage);
+    expect(later.board.theme).toBe('light'); expect(later.warnings).toEqual([]);
+    expect(loadBoard(storage).board).toEqual(later.board);
+  });
+  it('does not overwrite saved data if the required recovery copy fails', () => {
+    const storage = memoryStorage(); const initial = writeBoard(null, emptyState(), storage);
+    const next = { ...initial.board, tasks: [createTask({ title: 'Steps', subtasks: Array.from({ length: 101 }, (_, i) => ({ id: `${i}`, title: 'Step', done: false })) })] };
+    const setItem = storage.setItem;
+    storage.setItem = (key, value) => { if (key.includes(':recovery-')) throw new Error('quota'); setItem(key, value); };
+    expect(() => writeBoard(initial.raw, next, storage)).toThrow('quota');
+    expect(storage.getItem(STORAGE_KEY)).toBe(initial.raw);
   });
 });

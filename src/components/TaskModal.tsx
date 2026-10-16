@@ -5,7 +5,8 @@ import { LANES, createTask, generateId, type Category, type Lane, type Priority,
 import { RECUR_LABEL } from '../lib/display';
 import { STATUS_LABEL, STATUS_ORDER } from '../lib/progress';
 
-export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '', effectiveStatus, isCopy = false, onDismiss, onSave }: {
+export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '', effectiveStatus, isCopy = false, onDismiss, onSave, conflict }: {
+  conflict?: { title: string; onUseMine: () => void; onKeepTheirs: () => void };
   task: Task | null; defaultLane: Lane; defaultDate?: string; defaultTime?: string; effectiveStatus?: TaskStatus; isCopy?: boolean; onDismiss: () => void; onSave: (task: Task) => void;
 }) {
   const areas = useAreas();
@@ -23,6 +24,7 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
   const [status, setStatus] = useState<TaskStatus>(effectiveStatus ?? task?.status ?? 'not-started');
   const [formError, setFormError] = useState('');
   const titleRef = useRef<HTMLInputElement>(null);
+  const keepTheirsRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
   const scrimRef = useRef<HTMLDivElement | null>(null);
@@ -63,7 +65,7 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
           modalRef.current.querySelectorAll<HTMLElement>(
             'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
           )
-        ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+        ).filter(el => el.getClientRects().length > 0 && !el.closest('[inert]') && el.getAttribute('aria-hidden') !== 'true');
 
         if (focusable.length === 0) return;
         const first = focusable[0];
@@ -93,6 +95,11 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
       openerRef.current?.focus?.();
     };
   }, []);
+  const hasConflict = Boolean(conflict);
+  useEffect(() => {
+    if (hasConflict) keepTheirsRef.current?.focus();
+    else titleRef.current?.focus();
+  }, [hasConflict]);
   function addSubtask() {
     if (!newSubtask.trim()) return;
     setSubtasks(old => [...old, { id: generateId(), title: newSubtask.trim(), done: false }]);
@@ -109,7 +116,16 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
       estimateMinutes: Math.max(0, Number(estimate) || 0), subtasks, status, origin: isCopy ? 'personal' : task?.origin ?? 'personal' }));
   }
   return <div ref={scrimRef} className="modal-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onDismiss(); }}>
-    <section ref={modalRef} className="task-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <section ref={modalRef} className="task-modal" role="dialog" aria-modal="true" aria-labelledby={conflict ? 'task-conflict-title' : 'modal-title'}>
+      {conflict && <>
+        <div className="modal-head"><h2 id="task-conflict-title">This task changed in another tab</h2></div>
+        <div className="form-scroll"><p>Your draft of <strong>{conflict.title}</strong> is kept. Choose which version to use.</p></div>
+        <div className="modal-footer">
+          <button type="button" className="button button-primary" onClick={conflict.onUseMine}>Use mine</button>
+          <button ref={keepTheirsRef} type="button" className="button button-secondary" onClick={conflict.onKeepTheirs}>Keep theirs</button>
+        </div>
+      </>}
+      <div hidden={hasConflict} style={hasConflict ? undefined : { display: 'contents' }}>
       <div className="modal-head"><div><span className="eyebrow">MAKE IT HAPPEN</span><h2 id="modal-title">{isCopy ? 'Duplicate task' : task ? 'Edit task' : 'Create a task'}</h2></div><button aria-label="Close editor" type="button" className="icon-button" onClick={onDismiss}><X size={20}/></button></div>
       <form onSubmit={submit}>
         <div className="form-scroll">
@@ -136,6 +152,7 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
         </div>
         <div className="modal-footer"><button type="button" className="button button-ghost" onClick={onDismiss}>Cancel</button><button type="submit" className="button button-primary"><Check size={17}/>{isCopy ? 'Create copy' : task ? 'Save changes' : 'Create task'}</button></div>
       </form>
+      </div>
     </section>
   </div>;
 }
