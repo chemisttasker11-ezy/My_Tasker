@@ -1,9 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
-import { Archive, CalendarDays, CalendarRange, BarChart3, Check, CheckCircle2, ChevronRight, LayoutDashboard, ListTodo, Menu, Moon, Plus, Settings2, Sparkles, Sun, Target, X } from 'lucide-react';
 import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, readState, rescheduleTask, saveTaskChanges, setTaskStatus, toggleCompletion, validateImported } from './model';
-import { activeItem, downloadable, LANE_LABEL, longToday } from './lib/display';
+import { activeItem, downloadable, LANE_LABEL } from './lib/display';
 import { TaskModal } from './components/TaskModal';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
@@ -26,19 +25,12 @@ import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
 import { dailyQuote, quoteSettings } from './lib/quotes';
 import { projectSchedule, taskForPlanned, relevantTasksForDate } from './lib/planProjection';
-import { Library, Quote, Printer, LogOut, CircleHelp, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Quote, X } from 'lucide-react';
+import { WorkspaceChrome } from './components/WorkspaceChrome';
 import { WelcomeGuide } from './components/WelcomeGuide';
 import { sampleBoard } from './lib/sampleBoard';
 import type { CloudSnapshot, SignedInUser } from './lib/authApi';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
-
-const ICONS = { overview: LayoutDashboard, board: ListTodo, today: Sun, week: BarChart3, calendar: CalendarRange, upcoming: CalendarDays, goals: Target, completed: CheckCircle2, archived: Archive, settings: Settings2, library: Library, quotes: Quote, tracker: Printer };
-const NAV: { id: View; label: string }[] = [
-  { id: 'overview', label: 'Overview' }, { id: 'board', label: 'My task board' },
-  { id: 'today', label: 'Today' }, { id: 'week', label: 'Week planner' }, { id: 'calendar', label: 'Calendar' }, { id: 'upcoming', label: 'Upcoming' },
-  { id: 'goals', label: 'Long-term goals' }, { id: 'completed', label: 'Completed' },
-  { id: 'archived', label: 'Archived tasks' }, { id: 'library', label: 'Life task library' }, { id: 'tracker', label: 'Printable tracker' }, { id: 'quotes', label: 'Direction & quotes' }
-];
 
 interface AppProps {
   account?: SignedInUser;
@@ -58,7 +50,6 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<Category | 'All'>('All');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'All'>('All');
-  const [mobileNav, setMobileNav] = useState(false);
   const [notice, setNotice] = useState('');
   const [saveError, setSaveError] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +83,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   }, [board.areas, categoryFilter]);
 
   function alertNotice(message: string) { setNotice(message); }
-  function navigate(next: View) { setView(next); setMobileNav(false); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+  function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   function showEditor(task: Task | null, lane: Lane = 'urgent', date = '') { setEditor({ task, lane, date }); }
   function duplicateTask(task: Task) { setEditor({ task: cloneTask(task), lane: task.lane, isCopy: true }); }
   function saveTask(task: Task) {
@@ -183,35 +174,24 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
       alertNotice('Imported local tasks into your private account.');
     } catch (error) { alertNotice(error instanceof Error ? error.message : 'Could not read the local board.'); }
   }
-  const selectedNav = NAV.find(n => n.id === view);
   const reminder = dailyQuote(board.quotes, day, relevantTasksForDate(board,day));
   function addTemplates(ids: string[]) {
     setBoard(current => addLifeTemplates(current, ids));
     alertNotice('Life tasks added with notes and checklists. Set dates whenever you are ready.');
   }
 
-  return <AreasContext.Provider value={board.areas}><div className="app-shell">
-    <a className="skip-link" href="#main-content">Skip to main content</a>
-    <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
-      <div className="brand"><div className="brand-mark"><Check size={21} strokeWidth={3}/></div><div className="brand-name">My<span>Tasker</span><strong>MAKE ROOM FOR LIFE</strong></div><button className="icon-button mobile-close" type="button" aria-label="Close menu" onClick={() => setMobileNav(false)}><X size={20}/></button></div>
-      <div className="workspace-label">YOUR WORKSPACE <span className="workspace-dot" /></div>
-      <nav id="main-navigation" className="side-nav" aria-label="Main navigation">
-        <p className="nav-section">WORKSPACE</p>
-        {NAV.map(n => {
-          const Icon = ICONS[n.id];
-          const count = n.id === 'today' ? todayTasks.length : n.id === 'goals' ? goals.length : undefined;
-          return <button key={n.id} className={`nav-link ${view === n.id ? 'selected' : ''}`} aria-current={view === n.id ? 'page' : undefined} onClick={() => navigate(n.id)}><Icon size={19} strokeWidth={1.9}/><span>{n.label}</span>{typeof count === 'number' && <span className="nav-count">{count}</span>}</button>;
-        })}
-        <p className="nav-section">PREFERENCES</p>
-        <button className={`nav-link ${view === 'settings' ? 'selected' : ''}`} onClick={() => navigate('settings')}><Settings2 size={19}/><span>Settings & backup</span></button>
-      </nav>
-      <div className="sidebar-bottom"><div className="side-note-icon"><Sparkles size={18}/></div><p><strong>Little steps. Big progress.</strong><br/>Stay focused on what matters, one task at a time.</p><div className="sidebar-avatar"><div className="avatar">MC</div><div><strong>My workspace</strong><span>Private to this browser</span></div><span className="online-dot"/></div></div>
-    </aside>
-    {mobileNav && <button className="mobile-backdrop" onClick={() => setMobileNav(false)} aria-label="Close navigation"/>}
-    <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-menu" aria-label="Open menu" aria-controls="main-navigation" aria-expanded={mobileNav} onClick={() => setMobileNav(true)}><Menu size={23}/></button><div className="breadcrumb">Workspace <ChevronRight size={14}/> <strong>{view === 'board' ? 'Task board' : view === 'settings' ? 'Settings' : selectedNav?.label}</strong></div></div><div className="topbar-right">{account && onAdminReturn && <button type="button" className="icon-button" aria-label="Return to secured admin" title="Admin dashboard" onClick={()=>void returnToAdmin()}><ShieldCheck size={19}/></button>}{account && <button type="button" className="icon-button auth-help-top" aria-label="Show getting started guide" onClick={() => setGuideOpen(true)}><CircleHelp size={19}/></button>}<span className="date-chip"><CalendarDays size={16}/>{longToday(day)}</span><button className="icon-button theme-toggle" aria-label="Toggle light or dark theme" onClick={() => setBoard(s => ({ ...s, theme: s.theme === 'light' ? 'dark' : 'light' }))}>{board.theme === 'light' ? <Moon size={19}/> : <Sun size={19}/>}</button><button className="top-add" onClick={() => showEditor(null, 'urgent')}><Plus size={18}/> <span>New task</span></button>
-        {account && <button className="icon-button auth-logout-top" type="button" aria-label="Save and sign out" onClick={() => void signOutSafely()}><LogOut size={20}/></button>}</div></header>
-      <main className="content" id="main-content" tabIndex={-1}>
+  return <AreasContext.Provider value={board.areas}>
+    <WorkspaceChrome view={view} day={day} theme={board.theme}
+      todayCount={todayTasks.length} goalsCount={goals.length} accountEmail={account?.email}
+      onNavigate={navigate} onThemeToggle={()=>setBoard(s=>({...s,theme:s.theme==='light'?'dark':'light'}))}
+      onNewTask={()=>showEditor(null,'urgent')} onGuide={account?()=>setGuideOpen(true):undefined}
+      onSignOut={account?()=>void signOutSafely():undefined}
+      onAdminReturn={onAdminReturn?()=>void returnToAdmin():undefined}
+      overlays={<>
+    <WelcomeGuide open={guideOpen} onClose={closeGuide} onBoard={() => navigate('board')} onWeek={() => navigate('week')}/>
+    {editor && <TaskModal key={`${editor.task?.id ?? `new-${editor.lane}`}-${editor.date ?? ''}`} task={editor.task} defaultLane={editor.lane} defaultDate={editor.date ?? ''} effectiveStatus={editor.task ? visibleStatus(editor.task, isCompleted(editor.task, board.completions, day)) : undefined} isCopy={editor.isCopy} onDismiss={() => setEditor(null)} onSave={saveTask}/>}
+    {notice && <div className="toast" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification"><X size={15}/></button></div>}
+      </>}>
         {saveError && <div className="save-warning" role="alert">
           {account ? <>
             <strong>Changes not synced.</strong> {cloudFailure}. Your edits are still on this page; export a backup before closing it.
@@ -236,10 +216,6 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
         {view === 'settings' && <SettingsView board={board} setBoard={setBoard} exportData={exportData} importData={importData} reset={reset} fileInputRef={fileInputRef} navigate={navigate} alertNotice={alertNotice}
           account={account} signOut={signOutSafely} showGuide={() => setGuideOpen(true)} importLocal={importFromThisBrowser}/>}
         <footer className="site-footer"><span>Built for your real life <span>✳</span></span><span>{account ? 'Private account sync' : 'Local demo'} · Australia/Brisbane · Version 1.1</span></footer>
-      </main>
-    </div>
-    <WelcomeGuide open={guideOpen} onClose={closeGuide} onBoard={() => navigate('board')} onWeek={() => navigate('week')}/>
-    {editor && <TaskModal key={`${editor.task?.id ?? `new-${editor.lane}`}-${editor.date ?? ''}`} task={editor.task} defaultLane={editor.lane} defaultDate={editor.date ?? ''} effectiveStatus={editor.task ? visibleStatus(editor.task, isCompleted(editor.task, board.completions, day)) : undefined} isCopy={editor.isCopy} onDismiss={() => setEditor(null)} onSave={saveTask}/>}
-    {notice && <div className="toast" role="status"><CheckCircle2 size={17}/>{notice}<button onClick={() => setNotice('')} aria-label="Dismiss notification"><X size={15}/></button></div>}
-  </div></AreasContext.Provider>;
+    </WorkspaceChrome>
+  </AreasContext.Provider>;
 }
