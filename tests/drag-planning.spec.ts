@@ -43,7 +43,7 @@ test('Calendar day opens editable window, and selected days can be copied to ano
 test('mobile planning surfaces avoid horizontal body overflow at common widths',async ({page})=>{
   for(const width of [320,375,390,768,1024,1440]){
     await page.setViewportSize({width,height:850});
-    if(width<800){
+    if(width<700){
       await page.getByRole('button',{name:'Open menu'}).click();
       await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:/Week planner/}).click();
     } else {
