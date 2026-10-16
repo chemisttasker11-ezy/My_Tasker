@@ -55,7 +55,16 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'All'>('All');
   const [notice, setNotice] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const day = brisbaneToday();
+  const [day, setDay] = useState(brisbaneToday);
+  useEffect(() => {
+    const refresh = () => setDay(current => {
+      const actual = brisbaneToday();
+      return actual === current ? current : actual;
+    });
+    const id = window.setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(id); document.removeEventListener('visibilitychange', refresh); };
+  }, []);
   const [trackerLaunch, setTrackerLaunch] = useState<TrackerLaunch>({ anchor: day, scale: 'day' });
   const { active, completed, todayCopies, todayTasks, doneToday, goals, currentWeekScore } =
     useMemo(() => projectBoardSummary(board, day), [board, day]);
