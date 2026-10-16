@@ -23,12 +23,6 @@ function addDaysUTC(day: string, count: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-function addDaysUTC(day: string, count: number): string {
-  const date = new Date(`${day}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + count);
-  return date.toISOString().slice(0, 10);
-}
-
 /** Pick no more than three deliberate daily priorities; independent of task status. */
 export function toggleDailyFocus(state: BoardState, day: string, taskId: string): BoardState {
   if (!validISODate(day) || !day || !state.tasks.some(t => t.id === taskId && !t.archivedAt) && !state.plannedEntries.some(e => e.id === taskId && e.date === day)) return state;
