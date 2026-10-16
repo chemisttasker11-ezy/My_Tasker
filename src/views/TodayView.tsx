@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { FocusView } from './FocusView';
+import { QuickAdd } from '../components/QuickAdd';
+import type { ParsedQuickAdd } from '../lib/quickAdd';
 import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace';
 import type { BoardState } from '../model';
 import { Activity, ArrowRight, Check, CheckCircle2, ChevronRight, Circle, Plus, Target } from 'lucide-react';
@@ -14,8 +18,14 @@ interface Props {
   onFocus: (date: string, id: string) => void;
   navigate: (view: View) => void; showEditor: (task: Task | null, lane?: Lane) => void;
   toggleTask: (id: string) => void;
+  toggleSubtask: (taskId: string, subtaskId: string) => void;
+  onQuickAdd: (parsed: ParsedQuickAdd) => void;
 }
-export function TodayView({ board, planActions, todayTasks, doneToday, day, allTasks, focusIds, completed, onFocus, navigate, showEditor, toggleTask }: Props) {
+export function TodayView({ board, planActions, todayTasks, doneToday, day, allTasks, focusIds, completed, onFocus, navigate, showEditor, toggleTask, toggleSubtask, onQuickAdd }: Props) {
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
+  const focused = todayTasks.find(t => t.id === focusTaskId);
+  const focusEntry = board.plannedEntries.find(e => e.id === focusTaskId);
+  const focusTask = focused ?? (focusEntry ? allTasks.find(t => t.id === focusEntry.id) : undefined);
   const focusTasks = focusIds.map(id => allTasks.find(task => task.id === id && !task.archivedAt)).filter((task): task is Task => Boolean(task));
   const rest = todayTasks.filter(task => !focusIds.includes(task.id)).sort((a, b) => (a.priority === 'high' ? 0 : 1) - (b.priority === 'high' ? 0 : 1));
   const overdue = todayTasks.filter(task => task.dueDate && task.dueDate < day);
@@ -35,10 +45,13 @@ export function TodayView({ board, planActions, todayTasks, doneToday, day, allT
         className={`today-focus-button ${pinned ? 'selected' : ''}`} onClick={() => onFocus(day, task.id)}
         aria-label={`${pinned ? 'Remove' : 'Add'} ${task.title} ${pinned ? 'from' : 'to'} today's top three`}
         title={pinned ? 'Remove from top three' : 'Add to top three'}><Target size={17}/></button>
+      <button type="button" className="button button-secondary" onClick={() => setFocusTaskId(task.id)} aria-label={`Start focus mode for ${task.title}`}>Focus</button>
       <button type="button" className="icon-button small today-edit-button" aria-label={`Edit ${task.title}`} onClick={() => fromPlan ? document.getElementById('daily-planner')?.scrollIntoView({behavior:'smooth'}) : showEditor(task)}><ChevronRight size={17}/></button>
     </div>;
   }
   return <>
+    {focusTask && <div className="pr3-focus-overlay" role="dialog" aria-modal="true" aria-label="Focus mode"><FocusView key={focusTask.id} title={focusTask.title} notes={focusTask.description} checklist={focusTask.subtasks.map(st=>({id:st.id,text:st.title,done:st.done}))} estimateMin={focusTask.estimateMinutes} onToggleItem={id => { if(focusEntry) planActions.toggleStep(focusEntry.id,id); else toggleSubtask(focusTask.id,id); }} onDone={() => { toggleTask(focusTask.id); setFocusTaskId(null); }} onExit={() => setFocusTaskId(null)}/></div>}
+    <div className="pr3-quick-add"><QuickAdd onAddParsed={onQuickAdd} todayISO={day}/></div>
     <div className="page-title-row"><div><h1>Your focus today</h1><p>{longToday(day)} · Make the important work manageable.</p></div><button className="button button-primary" onClick={() => showEditor(null, 'daily')}><Plus size={18}/> Add task</button></div>
     <section id="daily-planner"><PlanWorkspace board={board} dates={[day]} actions={planActions} title="Plan today from your task board" compact/></section>
     <div className="focus-summary"><span className="focus-summary-icon"><Activity size={22}/></span><div><strong>{todayTasks.length} tasks on today's list</strong><p>Pick up to three priorities, then work through the rest at your pace.</p></div>{overdue.length > 0 && <span className="overdue-counter">{overdue.length} overdue</span>}</div>
