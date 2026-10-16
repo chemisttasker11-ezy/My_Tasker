@@ -23,11 +23,73 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
   const [status, setStatus] = useState<TaskStatus>(effectiveStatus ?? task?.status ?? 'not-started');
   const [formError, setFormError] = useState('');
   const titleRef = useRef<HTMLInputElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const modalRef = useRef<HTMLElement | null>(null);
+  const scrimRef = useRef<HTMLDivElement | null>(null);
+
   useEffect(() => {
+    openerRef.current = (document.activeElement as HTMLElement) ?? null;
     titleRef.current?.focus();
-    const listener = (e: KeyboardEvent) => { if (e.key === 'Escape') onDismiss(); };
+
+    const inertedElements: HTMLElement[] = [];
+    const scrim = scrimRef.current;
+    if (scrim) {
+      let current: HTMLElement | null = scrim;
+      while (current && current !== document.body) {
+        const parent: HTMLElement | null = current.parentElement;
+        if (parent) {
+          for (const sibling of Array.from(parent.children)) {
+            if (sibling !== current && sibling instanceof HTMLElement && !sibling.hasAttribute('inert')) {
+              sibling.setAttribute('inert', '');
+              (sibling as unknown as { inert?: boolean }).inert = true;
+              inertedElements.push(sibling);
+            }
+          }
+        }
+        current = parent;
+      }
+    }
+
+    const listener = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onDismiss();
+        return;
+      }
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusable = Array.from(
+          modalRef.current.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter(el => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true');
+
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last || !modalRef.current.contains(document.activeElement)) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
     document.addEventListener('keydown', listener);
-    return () => document.removeEventListener('keydown', listener);
+    return () => {
+      document.removeEventListener('keydown', listener);
+      for (const el of inertedElements) {
+        el.removeAttribute('inert');
+        (el as unknown as { inert?: boolean }).inert = false;
+      }
+      openerRef.current?.focus?.();
+    };
   }, [onDismiss]);
   function addSubtask() {
     if (!newSubtask.trim()) return;
@@ -44,8 +106,8 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
     onSave(createTask({ ...(task ?? {}), id: task?.id, title, description, lane, category, priority, dueDate: date, scheduledTime, scheduleAnchor: task && date === task.dueDate ? (task.scheduleAnchor || date) : date, recurrence,
       estimateMinutes: Math.max(0, Number(estimate) || 0), subtasks, status, origin: isCopy ? 'personal' : task?.origin ?? 'personal' }));
   }
-  return <div className="modal-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onDismiss(); }}>
-    <section className="task-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  return <div ref={scrimRef} className="modal-scrim" onMouseDown={e => { if (e.target === e.currentTarget) onDismiss(); }}>
+    <section ref={modalRef} className="task-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="modal-head"><div><span className="eyebrow">MAKE IT HAPPEN</span><h2 id="modal-title">{isCopy ? 'Duplicate task' : task ? 'Edit task' : 'Create a task'}</h2></div><button aria-label="Close editor" type="button" className="icon-button" onClick={onDismiss}><X size={20}/></button></div>
       <form onSubmit={submit}>
         <div className="form-scroll">

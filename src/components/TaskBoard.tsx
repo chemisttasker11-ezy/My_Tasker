@@ -26,16 +26,16 @@ export function CardPresentation({ task, done, day, onComplete, onEdit, onDuplic
         <div className="card-actions">
           {!ghost && (
             <>
-              <button type="button" className="icon-button small subtle" aria-label={`More options for ${task.title}`} onClick={() => setMenu(!menu)}><MoreHorizontal size={17} /></button>
+              <button type="button" className="icon-button small subtle" aria-label={`More options for ${task.title}`} aria-expanded={menu} aria-haspopup="true" onClick={() => setMenu(!menu)}><MoreHorizontal size={17} /></button>
               <button type="button" className="drag-handle" aria-label={`Drag ${task.title}`} title="Drag to move task" {...dragHandle}><GripVertical size={18} /></button>
             </>
           )}
-          {menu && !ghost && <div className="card-popover">
-            <button type="button" onClick={() => { setMenu(false); onEdit(task); }}><SlidersHorizontal size={15}/> Edit task</button>
-            <button type="button" onClick={() => { setMenu(false); onDuplicate(task); }}><Copy size={15}/> Duplicate & edit</button>
-            <div className="popover-label">Move to</div>
-            {LANES.filter(l => l.id !== task.lane).map(l => <button type="button" key={l.id} onClick={() => { setMenu(false); onMove(task.id, l.id); }}><ArrowRight size={14}/> {l.title}</button>)}
-            <button type="button" className="danger" onClick={() => { setMenu(false); onArchive(task.id); }}><Archive size={15}/> Archive task</button>
+          {menu && !ghost && <div className="card-popover" role="menu" aria-label="Card actions" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); } }}>
+            <button type="button" role="menuitem" onClick={() => { setMenu(false); onEdit(task); }}><SlidersHorizontal size={15}/> Edit task</button>
+            <button type="button" role="menuitem" onClick={() => { setMenu(false); onDuplicate(task); }}><Copy size={15}/> Duplicate & edit</button>
+            <div className="popover-label">Move to lane</div>
+            {LANES.filter(l => l.id !== task.lane).map(l => <button type="button" role="menuitem" key={l.id} title={`Move to ${l.title}`} onClick={() => { setMenu(false); onMove(task.id, l.id); }}><ArrowRight size={14}/> {l.title}</button>)}
+            <button type="button" role="menuitem" className="danger" onClick={() => { setMenu(false); onArchive(task.id); }}><Archive size={15}/> Archive task</button>
           </div>}
         </div>
       </div>
