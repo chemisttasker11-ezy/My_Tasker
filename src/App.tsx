@@ -3,7 +3,8 @@ import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
 import { createTaskController } from './controllers/taskController';
 import { type Category, type Lane, type Priority, type Task, type View, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
-import { activeItem, downloadable } from './lib/display';
+import { downloadable } from './lib/display';
+import { projectBoardSummary } from './lib/boardSummary';
 import { TaskModal } from './components/TaskModal';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
@@ -15,8 +16,6 @@ import { SettingsView } from './views/SettingsView';
 import { ArchivedView } from './views/ArchivedView';
 import { CalendarView } from './views/CalendarView';
 import { visibleStatus } from './lib/progress';
-import { mondayOf } from './lib/calendar';
-import { scoreWeek } from './lib/scoring';
 import { WeekPlannerView } from './views/WeekPlannerView';
 import { LibraryView } from './views/LibraryView';
 import { QuotesView } from './views/QuotesView';
@@ -24,7 +23,7 @@ import type { TrackerLaunch } from './views/TrackerView';
 import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
 import { dailyQuote, quoteSettings } from './lib/quotes';
-import { projectSchedule, taskForPlanned, relevantTasksForDate } from './lib/planProjection';
+import { relevantTasksForDate } from './lib/planProjection';
 import { CheckCircle2, Quote, X } from 'lucide-react';
 import { WorkspaceChrome } from './components/WorkspaceChrome';
 import { WelcomeGuide } from './components/WelcomeGuide';
@@ -54,29 +53,13 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const fileInputRef = useRef<HTMLInputElement>(null);
   const day = brisbaneToday();
   const [trackerLaunch, setTrackerLaunch] = useState<TrackerLaunch>({ anchor: day, scale: 'day' });
-  const active = useMemo(() => board.tasks.filter(activeItem), [board.tasks]);
-  const completed = (task: Task) => {
-    const entry = board.plannedEntries.find(e => e.id === task.id);
-    return entry ? entry.status === 'finished' : isCompleted(task, board.completions, day);
-  };
+  const { active, completed, todayCopies, todayTasks, doneToday, goals, currentWeekScore } =
+    useMemo(() => projectBoardSummary(board, day), [board, day]);
   const visible = useMemo(() => active.filter(t =>
     (categoryFilter === 'All' || t.category === categoryFilter) &&
     (priorityFilter === 'All' || t.priority === priorityFilter) &&
     (!search.trim() || `${t.title} ${t.description} ${t.category}`.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim()))
   ), [active, categoryFilter, priorityFilter, search]);
-  const todaySchedule = useMemo(() => projectSchedule(board, day, day), [board, day]);
-  const todayCopies = todaySchedule.planned.map(entry => taskForPlanned(entry, board.tasks.find(t => t.id === entry.sourceTaskId)));
-  const scheduledSourceIds = new Set(todaySchedule.planned.map(entry => entry.sourceTaskId));
-  const outstanding = active.filter(t => !completed(t) && !scheduledSourceIds.has(t.id));
-  const todayLegacy = outstanding.filter(t => t.status !== 'postponed' &&
-    (t.lane === 'daily' || t.lane === 'urgent' || (t.dueDate && t.dueDate <= day)));
-  const todayTasks = [...todayCopies.filter(t => t.status !== 'postponed'), ...todayLegacy];
-  const dayDoneHistory = board.completions.filter(c => brisbaneToday(new Date(c.completedAt)) === day).length;
-  const doneToday = dayDoneHistory + board.plannedEntries.filter(entry => entry.status === 'finished' && entry.completedAt &&
-    brisbaneToday(new Date(entry.completedAt)) === day).length;
-  const goals = active.filter(t => t.lane === 'goals');
-  const currentWeekStart = mondayOf(day);
-  const currentWeekScore = useMemo(() => scoreWeek(board.weekPlans?.[currentWeekStart], board, currentWeekStart, day), [board, currentWeekStart, day]);
 
   useEffect(() => {
     if (categoryFilter !== 'All' && !board.areas.some(a => a.id === categoryFilter)) setCategoryFilter('All');
