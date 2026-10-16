@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from 'react';
 import {
-  type BoardState, type Task, type TaskStatus, type Lane,
+  type BoardState, type Task, type TaskStatus, type Lane, brisbaneToday,
   saveTaskChanges, setTaskStatus, setCalendarOccurrenceStatus, moveInBoard, rescheduleTask, toggleCompletion
 } from '../model';
 import { LANE_LABEL } from '../lib/display';
@@ -24,7 +24,7 @@ export function createTaskController(
   function changeCalendarOccurrenceStatus(id: string, status: TaskStatus, postponedTo?: string, occurrenceDate?: string) {
     if (!occurrenceDate) { changeStatus(id,status,postponedTo); return; }
     const task = board.tasks.find(t=>t.id===id);
-    if (task && task.recurrence!=='none' && occurrenceDate!==new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Brisbane',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()) &&
+    if (task && task.recurrence!=='none' && occurrenceDate!==brisbaneToday() &&
       status!=='finished' && status!=='not-started') {
       alertNotice('To change progress or postpone the whole recurring series, edit the source task. Calendar history supports Finished and Not started for individual past occurrences.');
       return;
