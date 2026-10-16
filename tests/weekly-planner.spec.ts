@@ -6,18 +6,15 @@ test.beforeEach(async ({ page }) => {
   await page.reload();
 });
 
-test('weekly planner supports explicit commitments and weighted status scores', async ({ page }) => {
+test('weekly planner supports deliberate commitments and weighted status', async ({ page }) => {
   await page.getByRole('button', { name: 'Week planner' }).click();
   await expect(page.getByRole('heading', { name: 'Plan your week' })).toBeVisible();
   await expect(page.getByText('Not scored')).toBeVisible();
-  await page.getByRole('button', { name: /Add task on/ }).first().click();
-  await page.getByRole('textbox', { name: 'Task name' }).fill('Review release');
-  await page.getByRole('button', { name: 'Create task' }).click();
-  await page.getByRole('button', { name: 'Add to plan' }).first().click();
+  const source = page.locator('.plan-source-card').filter({ hasText: 'Family time' }).first();
+  await source.getByRole('button', { name: /Add Family time to/ }).click();
   await expect(page.getByText('0/100')).toBeVisible();
-  await page.getByRole('button', { name: 'Review release' }).first().click();
-  await page.getByRole('combobox', { name: 'Task status' }).selectOption('progressing');
-  await page.getByRole('button', { name: 'Save changes' }).click();
+  const planned = page.locator('[data-testid^="plan-entry-"]').filter({ hasText: 'Family time' }).first();
+  await planned.getByRole('combobox', { name: /Status for planned Family time/ }).selectOption('progressing');
   await expect(page.getByText('60/100')).toBeVisible();
   await page.reload();
   await page.getByRole('button', { name: 'Week planner' }).click();
