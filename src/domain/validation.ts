@@ -37,11 +37,13 @@ export function validateImported(raw: unknown): BoardState {
       throw new Error('Backup contains invalid tasks.');
     }
     ids.add(t.id);
+    const seenSubtasks = new Set<string>();
     const subtasks = t.subtasks.map(s => {
-      if (!s || typeof s.id !== 'string' || typeof s.title !== 'string' || s.title.length > 250 || typeof s.done !== 'boolean') {
+      if (!s || typeof s.id !== 'string' || !s.id || s.id.length > 100 || seenSubtasks.has(s.id) || typeof s.title !== 'string' || !s.title.trim() || s.title.length > 250 || typeof s.done !== 'boolean') {
         throw new Error('Backup contains invalid checklist items.');
       }
-      return { id: s.id.slice(0, 100), title: s.title, done: s.done };
+      seenSubtasks.add(s.id);
+      return { id: s.id, title: s.title, done: s.done };
     });
     return {
       ...t, subtasks,
