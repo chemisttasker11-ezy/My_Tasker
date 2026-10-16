@@ -62,6 +62,9 @@ export interface WeeklyPlan {
   review: WeekReview | null;
 }
 export interface BoardState {
+  revision?: number;
+  weeklyScoreEnabled?: boolean;
+  onboardingStep?: number;
   areas: Area[];
   quotes?: QuoteSettings;
   version: 1;
@@ -81,6 +84,7 @@ export const LANES: { id: Lane; title: string; description: string; emoji: strin
   { id: 'goals', title: 'Long-term goals', description: 'Life beyond the checklist', emoji: '✨', tone: 'rose' }
 ];
 
+/** Legacy area defaults: required for original backups that omitted areas. */
 export const CATEGORIES: Area[] = [
   { id: 'ChemistTasker', emoji: '✦', tone: 'indigo' },
   { id: 'Pharmacy', emoji: '✚', tone: 'violet' },
@@ -88,6 +92,9 @@ export const CATEGORIES: Area[] = [
   { id: 'Finance', emoji: '$', tone: 'orange' },
   { id: 'Personal', emoji: '◉', tone: 'teal' }
 ];
+
+export const NEUTRAL_AREAS: Area[] = ['Home', 'Health', 'Work', 'People', 'Money', 'Me'].map(id => ({ id, emoji: '●', tone: 'teal' }));
+export const LIMITS = { tasks: 10000, completions: 50000, areas: 40, checklist: 100, weeks: 260, focusDates: 1100, commitments: 150 };
 
 const DEFAULT_RECURRENCE: Record<Lane, Recurrence> = {
   urgent: 'none', daily: 'daily', weekly: 'weekly', monthly: 'monthly', quarterly: 'quarterly', goals: 'none'
@@ -130,9 +137,14 @@ export function nextDueDate(date: string, recurrence: Recurrence, today: string)
   const anchor = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(anchor.getTime())) return date;
   let cursor = anchor;
+  const targetDate = new Date(`${today}T00:00:00Z`);
+  const stepMonths = recurrence === 'quarterly' ? 3 : recurrence === 'yearly' ? 12 : 1;
+  const near = recurrence === 'daily' || recurrence === 'weekly'
+    ? Math.floor((targetDate.getTime() - anchor.getTime()) / (86400000 * (recurrence === 'weekly' ? 7 : 1)))
+    : Math.floor(((targetDate.getUTCFullYear() - year) * 12 + targetDate.getUTCMonth() - month + 1) / stepMonths);
   const target = today;
   // Preserve calendar anchor on monthly schedules (31st becomes month-end when shorter).
-  for (let n = 1; n < 5000 && cursor.toISOString().slice(0, 10) <= target; n++) {
+  for (let n = Math.max(1, near); n < Math.max(1, near) + 5 && cursor.toISOString().slice(0, 10) <= target; n++) {
     let yearNext = year;
     let monthNext = month - 1;
     if (recurrence === 'daily') {
@@ -181,6 +193,7 @@ export function toggleCompletion(state: BoardState, id: string, now = new Date()
       })
     };
   }
+  if (state.completions.length >= LIMITS.completions) return state;
   const repeating = task.recurrence !== 'none';
   const next = repeating && task.dueDate
     ? nextDueDate(task.scheduleAnchor || task.dueDate, task.recurrence, today >= task.dueDate ? today : task.dueDate)
@@ -252,7 +265,9 @@ export function setTaskStatus(state: BoardState, id: string, status: TaskStatus,
 
 /** Save modal changes, without creating fake completions or losing existing history. */
 export function saveTaskChanges(state: BoardState, draft: Task, now = new Date()): BoardState {
+  if (draft.subtasks.length > LIMITS.checklist || draft.title.length > 250 || draft.description.length > 10000) return state;
   const prior = state.tasks.find(t => t.id === draft.id);
+  if (!prior && state.tasks.length >= LIMITS.tasks) return state;
   const status = draft.status;
   let base = state;
   if (prior && isCompleted(prior, base.completions, brisbaneToday(now)) && status !== 'finished') {
@@ -260,7 +275,7 @@ export function saveTaskChanges(state: BoardState, draft: Task, now = new Date()
   }
   // Finished is a recorded occurrence. Leave the persisted pending status until
   // completion is recorded, so recurring tasks do not remain finished next time.
-  const updated: Task = { ...draft, status: status === 'finished' ? (prior?.status ?? 'not-started') : status,
+  const updated: Task = { ...draft, completedAt: base.tasks.find(t => t.id === draft.id)?.completedAt ?? draft.completedAt, status: status === 'finished' ? (prior?.status ?? 'not-started') : status,
     updatedAt: now.toISOString() };
   base = { ...base, tasks: prior
     ? base.tasks.map(t => t.id === draft.id ? updated : t)
@@ -288,35 +303,6 @@ export function moveInBoard(state: BoardState, id: string, destination: Lane, ov
   return { ...state, tasks };
 }
 
-const seed: { lane: Lane; category: Category; title: string; recurrence?: Recurrence; priority?: Priority; description?: string }[] = [
-  { lane: 'urgent', category: 'Finance', title: 'Tax', priority: 'high', description: 'Review outstanding tax paperwork and identify the next step.' },
-  { lane: 'urgent', category: 'Personal', title: 'Take / book appointments', priority: 'high' },
-  { lane: 'urgent', category: 'Pharmacy', title: 'Clear reports backlog', priority: 'high', description: 'Review outstanding HMR and RMMR reports.' },
-  { lane: 'urgent', category: 'ChemistTasker', title: 'Claude setup', priority: 'medium', description: 'Finish the development assistant setup.' },
-  { lane: 'daily', category: 'Pharmacy', title: 'Complete any reports' },
-  { lane: 'daily', category: 'Family', title: 'Family time', priority: 'high' },
-  { lane: 'daily', category: 'Pharmacy', title: 'Pharmacy shifts or visits' },
-  { lane: 'daily', category: 'Personal', title: 'Check emails and reply' },
-  { lane: 'daily', category: 'Personal', title: 'Review my tasks' },
-  { lane: 'daily', category: 'Pharmacy', title: 'Training / CPD' },
-  { lane: 'daily', category: 'ChemistTasker', title: 'ChemistTasker progress', priority: 'high' },
-  { lane: 'weekly', category: 'Finance', title: 'Invoices for shifts' },
-  { lane: 'weekly', category: 'Pharmacy', title: 'Make sure reports are sent' },
-  { lane: 'weekly', category: 'Pharmacy', title: 'Check new referrals' },
-  { lane: 'weekly', category: 'Family', title: 'One day outing with family', priority: 'high' },
-  { lane: 'weekly', category: 'Family', title: 'Build a habit with family' },
-  { lane: 'monthly', category: 'Finance', title: 'Invoices' },
-  { lane: 'monthly', category: 'Finance', title: 'Claims' },
-  { lane: 'monthly', category: 'Finance', title: 'Review and pay bills' },
-  { lane: 'quarterly', category: 'Finance', title: 'BAS', recurrence: 'quarterly', description: 'Quarterly business activity statement.' },
-  { lane: 'quarterly', category: 'Finance', title: 'Annual tax return', recurrence: 'yearly' },
-  { lane: 'goals', category: 'Personal', title: 'Baladi', recurrence: 'none' },
-  { lane: 'goals', category: 'Personal', title: 'Sport', recurrence: 'none' },
-  { lane: 'goals', category: 'ChemistTasker', title: 'Grow ChemistTasker', recurrence: 'none' },
-  { lane: 'goals', category: 'Family', title: 'Family habits', recurrence: 'none' },
-  { lane: 'goals', category: 'Personal', title: 'Lose weight', recurrence: 'none' }
-];
-
 export const SUGGESTIONS = [
   { title: 'Review open PRs and staging readiness', category: 'ChemistTasker' as Category, lane: 'weekly' as Lane, description: 'Optional idea based on current SaaS work.' },
   { title: 'Plan ChemistTasker brand identity variants', category: 'ChemistTasker' as Category, lane: 'weekly' as Lane, description: 'Logo for mobile, compact mark, icon and wordmark.' },
@@ -333,7 +319,7 @@ export function createTask(values: Partial<Task> & Pick<Task, 'title'>): Task {
     title: values.title.trim(),
     description: values.description ?? '',
     lane,
-    category: values.category ?? 'Personal',
+    category: values.category ?? 'Me',
     priority: values.priority ?? 'medium',
     dueDate: values.dueDate ?? '',
     scheduledTime: values.scheduledTime ?? '',
@@ -351,18 +337,53 @@ export function createTask(values: Partial<Task> & Pick<Task, 'title'>): Task {
 }
 
 export function initialState(): BoardState {
-  return { version: 1, areas: CATEGORIES.map(a => ({ ...a })), theme: 'light', completions: [], weekPlans: {}, dailyFocus: {}, tasks: seed.map((t, i) => createTask({ ...t, id: `notebook-${i + 1}`, origin: 'notebook' })) };
+  return { version: 1, revision: 0, weeklyScoreEnabled: false, onboardingStep: 1, areas: NEUTRAL_AREAS.map(a => ({ ...a })), theme: 'light', completions: [], weekPlans: {}, dailyFocus: {}, tasks: [] };
 }
 
 export const STORAGE_KEY = 'my-command-centre:v1';
-export function readState(): BoardState {
+export interface LoadedBoard { board: BoardState; raw: string | null; recovery?: string; warning?: string; storageError?: boolean }
+export function preserveRaw(raw: string, kind: 'backup' | 'recovery', storage: Storage = localStorage): string {
+  let stamp = Date.now();
+  let key = `${STORAGE_KEY}:${kind}-${new Date(stamp).toISOString()}`;
+  while (storage.getItem(key) !== null) key = `${STORAGE_KEY}:${kind}-${new Date(++stamp).toISOString()}`;
+  storage.setItem(key, raw);
+  return key;
+}
+export function loadBoard(storage: Storage = localStorage): LoadedBoard {
+  let raw: string | null = null;
+  try { raw = storage.getItem(STORAGE_KEY); }
+  catch { return { board: initialState(), raw, recovery: 'Storage could not be read. Try reloading before starting fresh.', storageError: true }; }
+  if (raw === null) return { board: initialState(), raw };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return initialState();
-    return validateImported(JSON.parse(raw));
+    const warnings: string[] = [];
+    const board = validateImported(JSON.parse(raw), warnings);
+    return { board, raw, warning: warnings.join(' ') };
   } catch {
-    return initialState();
+    let storageError = false;
+    try { preserveRaw(raw, 'recovery', storage); } catch { storageError = true; }
+    return { board: initialState(), raw, recovery: 'This saved board could not be loaded. Your original data has been kept.', storageError };
   }
+}
+export function readState(): BoardState {
+  const loaded = loadBoard();
+  if (loaded.recovery) throw new Error(loaded.recovery);
+  return loaded.board;
+}
+/** Called inside the app's cross-tab Web Lock. Compare raw as well as revisions for legacy tabs. */
+export function writeBoard(expected: string | null, next: BoardState, storage: Storage = localStorage): { board: BoardState; raw: string } {
+  const current = storage.getItem(STORAGE_KEY);
+  if (current !== expected) throw new Error('conflict');
+  const warnings: string[] = [];
+  const board = validateImported(next, warnings);
+  if (warnings.length) throw new Error(`Board limit reached: ${warnings.join(' ')}`);
+  board.revision = (expected ? validateImported(JSON.parse(expected)).revision ?? 0 : 0) + 1;
+  if (expected && JSON.stringify(validateImported(JSON.parse(expected))) !== expected) preserveRaw(expected, 'backup', storage);
+  const raw = JSON.stringify(board);
+  storage.setItem(STORAGE_KEY, raw);
+  return { board, raw };
+}
+function validTimestamp(value: unknown): boolean {
+  return value === undefined || value === '' || (typeof value === 'string' && Number.isFinite(Date.parse(value)));
 }
 
 function validISODate(value: unknown): value is string {
@@ -375,17 +396,21 @@ function validISODate(value: unknown): value is string {
 function validTime(value: unknown): value is string {
   return typeof value === 'string' && (value === '' || /^([01]\d|2[0-3]):[0-5]\d$/.test(value));
 }
-export function validateImported(raw: unknown): BoardState {
+export function validateImported(raw: unknown, warnings: string[] = []): BoardState {
   if (!raw || typeof raw !== 'object') throw new Error('This is not a task backup.');
   const obj = raw as Partial<BoardState>;
-  if (obj.version !== 1 || !Array.isArray(obj.tasks) || !Array.isArray(obj.completions) || obj.tasks.length > 10000 || obj.completions.length > 50000) {
+  if (obj.version !== 1 || !Array.isArray(obj.tasks) || !Array.isArray(obj.completions)) {
     throw new Error('Unsupported or invalid task backup.');
   }
+  const trim = <T,>(items: T[], max: number, label: string): T[] => {
+    if (items.length > max) warnings.push(`${label} exceeded ${max}; extra entries were trimmed. The original is preserved before saving.`);
+    return items.slice(0, max);
+  };
   const lanes = new Set(LANES.map(l => l.id));
-  const areaInput = obj.areas ?? CATEGORIES;
-  if (!Array.isArray(areaInput) || areaInput.length < 1 || areaInput.length > 40) throw new Error('Backup must contain between 1 and 40 areas.');
+  const areaInput = obj.areas ?? [...CATEGORIES, ...NEUTRAL_AREAS.filter(a => obj.tasks!.some(t => t.category === a.id))];
+  if (!Array.isArray(areaInput) || areaInput.length < 1) throw new Error('Backup must contain between 1 and 40 areas.');
   const areaNames = new Set<string>();
-  const areas = areaInput.map(a => {
+  const areas = trim(areaInput, LIMITS.areas, 'Areas').map(a => {
     if (!a || typeof a.id !== 'string' || !a.id.trim() || a.id.length > 40 || a.id.trim().toLowerCase() === 'all' ||
       areaNames.has(a.id.trim().toLowerCase())) throw new Error('Backup contains invalid or duplicate areas.');
     areaNames.add(a.id.trim().toLowerCase());
@@ -393,31 +418,38 @@ export function validateImported(raw: unknown): BoardState {
       tone: ['indigo', 'violet', 'pink', 'orange', 'teal'].includes(a.tone) ? a.tone : 'teal' };
   });
   const categories = new Set(areas.map(c => c.id));
+  const removedAreas = new Set(areaInput.slice(LIMITS.areas).map(a => a?.id));
+  const categoryFor = (category: string) => removedAreas.has(category) ? areas[0].id : category;
   const recurrence = new Set<Recurrence>(['none', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly']);
   const priority = new Set<Priority>(['high', 'medium', 'low']);
   const statuses = new Set<TaskStatus>(['not-started', 'started', 'progressing', 'finished', 'postponed']);
   const ids = new Set<string>();
-  const tasks: Task[] = obj.tasks.map((t: Task) => {
+  const tasks: Task[] = trim(obj.tasks, LIMITS.tasks, 'Tasks').map((t: Task) => {
     if (!t || typeof t !== 'object' || typeof t.id !== 'string' || !t.id || t.id.length > 100 || ids.has(t.id) ||
       typeof t.title !== 'string' || !t.title.trim() || t.title.length > 250 ||
       typeof t.description !== 'string' || t.description.length > 10000 ||
-      !lanes.has(t.lane) || !categories.has(t.category) || !recurrence.has(t.recurrence) || !priority.has(t.priority) ||
+      !lanes.has(t.lane) || !categories.has(categoryFor(t.category)) || !recurrence.has(t.recurrence) || !priority.has(t.priority) ||
       !validISODate(t.dueDate) || (t.scheduleAnchor !== undefined && !validISODate(t.scheduleAnchor)) ||
       (t.scheduledTime !== undefined && !validTime(t.scheduledTime)) ||
       (t.status !== undefined && !statuses.has(t.status)) ||
-      !Array.isArray(t.subtasks) || t.subtasks.length > 100 ||
+      !['createdAt', 'updatedAt', 'completedAt', 'archivedAt'].every(key => validTimestamp(t[key as keyof Task])) ||
+      !Array.isArray(t.subtasks) ||
       !Number.isInteger(t.estimateMinutes) || t.estimateMinutes < 0 || t.estimateMinutes > 100000) {
       throw new Error('Backup contains invalid tasks.');
     }
     ids.add(t.id);
-    const subtasks = t.subtasks.map(s => {
+    const subIds = new Set<string>();
+    const subtasks = trim(t.subtasks, LIMITS.checklist, 'Checklist').map(s => {
       if (!s || typeof s.id !== 'string' || typeof s.title !== 'string' || s.title.length > 250 || typeof s.done !== 'boolean') {
         throw new Error('Backup contains invalid checklist items.');
       }
-      return { id: s.id.slice(0, 100), title: s.title, done: s.done };
+      let id = s.id.slice(0, 100);
+      if (!id || subIds.has(id)) id = generateId();
+      subIds.add(id);
+      return { id, title: s.title, done: s.done };
     });
     return {
-      ...t, subtasks,
+      ...t, category: categoryFor(t.category), subtasks,
       templateId: typeof t.templateId === 'string' && t.templateId.length <= 100 ? t.templateId : undefined,
       scheduledTime: t.scheduledTime || '',
       scheduleAnchor: t.scheduleAnchor || t.dueDate,
@@ -429,27 +461,27 @@ export function validateImported(raw: unknown): BoardState {
       origin: ['notebook', 'personal', 'idea'].includes(t.origin) ? t.origin : 'personal'
     };
   });
-  const completions = obj.completions.map((c: Completion) => {
-    if (!c || typeof c.id !== 'string' || typeof c.taskId !== 'string' || typeof c.title !== 'string' || typeof c.completedAt !== 'string' || typeof c.periodKey !== 'string' || !categories.has(c.category)) {
+  const completions = trim(obj.completions, LIMITS.completions, 'History').map((c: Completion) => {
+    if (!c || typeof c.id !== 'string' || typeof c.taskId !== 'string' || typeof c.title !== 'string' || typeof c.completedAt !== 'string' || !c.completedAt || !validTimestamp(c.completedAt) || typeof c.periodKey !== 'string' || !categories.has(categoryFor(c.category))) {
       throw new Error('Backup contains invalid completion history.');
     }
-    return { id: c.id.slice(0, 100), taskId: c.taskId.slice(0, 100), title: c.title.slice(0, 250), category: c.category, completedAt: c.completedAt, periodKey: c.periodKey.slice(0, 40), previousDueDate: validISODate(c.previousDueDate) ? c.previousDueDate : undefined,
+    return { id: c.id.slice(0, 100), taskId: c.taskId.slice(0, 100), title: c.title.slice(0, 250), category: categoryFor(c.category), completedAt: c.completedAt, periodKey: c.periodKey.slice(0, 40), previousDueDate: validISODate(c.previousDueDate) ? c.previousDueDate : undefined,
       nextDueDate: validISODate(c.nextDueDate) ? c.nextDueDate : undefined,
       previousStatus: c.previousStatus && statuses.has(c.previousStatus) ? c.previousStatus : undefined,
-      previousSubtasks: Array.isArray(c.previousSubtasks) && c.previousSubtasks.length <= 100 ? c.previousSubtasks.filter(s => s && typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 250 && typeof s.done === 'boolean').map(s => ({ id: s.id.slice(0, 100), title: s.title, done: s.done })) : undefined }; 
+      previousSubtasks: Array.isArray(c.previousSubtasks) ? trim(c.previousSubtasks, LIMITS.checklist, 'History checklist').filter(s => s && typeof s.id === 'string' && typeof s.title === 'string' && s.title.length <= 250 && typeof s.done === 'boolean').map((s, index, all) => ({ id: !s.id || all.findIndex(item => item.id.slice(0, 100) === s.id.slice(0, 100)) !== index ? generateId() : s.id.slice(0, 100), title: s.title, done: s.done })) : undefined };
   });
   // Backward-compatible with backups created before weekly planning was introduced.
   // Reject malformed optional records rather than persisting arbitrary imported shapes.
   const weekPlans: Record<string, WeeklyPlan> = Object.create(null) as Record<string, WeeklyPlan>;
   if (obj.weekPlans !== undefined) {
-    if (!obj.weekPlans || typeof obj.weekPlans !== 'object' || Array.isArray(obj.weekPlans) || Object.keys(obj.weekPlans).length > 260) throw new Error('Invalid weekly plans in backup.');
-    for (const [key, rawPlan] of Object.entries(obj.weekPlans)) {
+    if (!obj.weekPlans || typeof obj.weekPlans !== 'object' || Array.isArray(obj.weekPlans)) throw new Error('Invalid weekly plans in backup.');
+    for (const [key, rawPlan] of trim(Object.entries(obj.weekPlans), LIMITS.weeks, 'Weekly plans')) {
       const plan = rawPlan as WeeklyPlan;
       if (!validISODate(key) || !key || new Date(`${key}T12:00:00Z`).getUTCDay() !== 1 ||
         !plan || typeof plan !== 'object' || plan.weekStart !== key ||
-        !Array.isArray(plan.commitments) || plan.commitments.length > 150) throw new Error('Invalid weekly plan.');
+        !Array.isArray(plan.commitments)) throw new Error('Invalid weekly plan.');
       const seen = new Set<string>();
-      const commitments = plan.commitments.map(item => {
+      const commitments = trim(plan.commitments, LIMITS.commitments, 'Commitments').map(item => {
         if (!item || typeof item.taskId !== 'string' || !item.taskId || item.taskId.length > 100 || seen.has(item.taskId) ||
           typeof item.title !== 'string' || item.title.length > 250 ||
           !priority.has(item.priority) || !validISODate(item.plannedDate)) throw new Error('Invalid weekly commitment.');
@@ -461,7 +493,7 @@ export function validateImported(raw: unknown): BoardState {
         const r = plan.review;
         if (typeof r !== 'object' || typeof r.wins !== 'string' || typeof r.blockers !== 'string' ||
           typeof r.adjustment !== 'string' || [r.wins, r.blockers, r.adjustment].some(s => s.length > 1400) ||
-          typeof r.savedAt !== 'string' || (r.scoreSnapshot !== null && (!Number.isInteger(r.scoreSnapshot) || r.scoreSnapshot < 0 || r.scoreSnapshot > 100))) throw new Error('Invalid weekly review.');
+          typeof r.savedAt !== 'string' || !validTimestamp(r.savedAt) || (r.scoreSnapshot !== null && (!Number.isInteger(r.scoreSnapshot) || r.scoreSnapshot < 0 || r.scoreSnapshot > 100))) throw new Error('Invalid weekly review.');
         review = { wins: r.wins, blockers: r.blockers, adjustment: r.adjustment, savedAt: r.savedAt, scoreSnapshot: r.scoreSnapshot };
       }
       weekPlans[key] = { weekStart: key, commitments, review };
@@ -469,20 +501,25 @@ export function validateImported(raw: unknown): BoardState {
   }
   const dailyFocus: Record<string, string[]> = Object.create(null) as Record<string, string[]>;
   if (obj.dailyFocus !== undefined) {
-    if (!obj.dailyFocus || typeof obj.dailyFocus !== 'object' || Array.isArray(obj.dailyFocus) || Object.keys(obj.dailyFocus).length > 1100) throw new Error('Invalid daily focus backup.');
-    for (const [key, ids] of Object.entries(obj.dailyFocus)) {
-      if (!validISODate(key) || !key || !Array.isArray(ids) || ids.length > 3 ||
+    if (!obj.dailyFocus || typeof obj.dailyFocus !== 'object' || Array.isArray(obj.dailyFocus)) throw new Error('Invalid daily focus backup.');
+    for (const [key, ids] of trim(Object.entries(obj.dailyFocus), LIMITS.focusDates, 'Focus dates')) {
+      if (!validISODate(key) || !key || !Array.isArray(ids) ||
         ids.some(id => typeof id !== 'string' || !id || id.length > 100) ||
         new Set(ids).size !== ids.length) throw new Error('Invalid daily focus selection.');
-      dailyFocus[key] = ids;
+      dailyFocus[key] = trim(ids, 3, 'Daily priorities');
     }
   }
-  return { version: 1, tasks, completions, weekPlans, dailyFocus, areas, quotes: validateQuoteSettings(obj.quotes), theme: obj.theme === 'dark' ? 'dark' : 'light' };
+  let quotes = obj.quotes;
+  if (quotes && Array.isArray(quotes.custom) && quotes.daily && typeof quotes.daily === 'object' && !Array.isArray(quotes.daily)) {
+    quotes = { ...quotes, custom: trim(quotes.custom, 100, 'Custom quotes'), daily: Object.fromEntries(trim(Object.entries(quotes.daily), 1500, 'Daily quotes')) };
+  }
+  return { revision: Number.isSafeInteger(obj.revision) && obj.revision! >= 0 ? obj.revision : 0, weeklyScoreEnabled: typeof obj.weeklyScoreEnabled === 'boolean' ? obj.weeklyScoreEnabled : Object.values(weekPlans).some(p => p.commitments.length > 0 || p.review !== null), onboardingStep: obj.onboardingStep === 1 || obj.onboardingStep === 2 ? obj.onboardingStep : undefined, version: 1, tasks, completions, weekPlans, dailyFocus, areas, quotes: validateQuoteSettings(quotes), theme: obj.theme === 'dark' ? 'dark' : 'light' };
 }
 
 /** A weekly plan remains explicit, so postponement cannot silently inflate progress. */
-export function setWeekCommitment(state: BoardState, weekStart: string, task: Task, include: boolean): BoardState {
+export function setWeekCommitment(state: BoardState, weekStart: string, task: Pick<Task, 'id' | 'title' | 'priority' | 'dueDate'> & Partial<Task>, include: boolean): BoardState {
   if (!validISODate(weekStart) || !weekStart || new Date(`${weekStart}T12:00:00Z`).getUTCDay() !== 1) return state;
+  if (include && !state.weekPlans[weekStart] && Object.keys(state.weekPlans).length >= LIMITS.weeks) return state;
   const current = state.weekPlans?.[weekStart] ?? { weekStart, commitments: [], review: null };
   const already = current.commitments.some(c => c.taskId === task.id);
   if (already === include) return state;
@@ -506,7 +543,8 @@ function addDaysUTC(day: string, count: number): string {
 /** Pick no more than three deliberate daily priorities; independent of task status. */
 export function toggleDailyFocus(state: BoardState, day: string, taskId: string): BoardState {
   if (!validISODate(day) || !day || !state.tasks.some(t => t.id === taskId && !t.archivedAt)) return state;
-  const current = state.dailyFocus?.[day] ?? [];
+  if (!state.dailyFocus[day] && Object.keys(state.dailyFocus).length >= LIMITS.focusDates) return state;
+  const current = (state.dailyFocus?.[day] ?? []).filter(id => state.tasks.some(t => t.id === id && !t.archivedAt));
   const included = current.includes(taskId);
   if (!included && current.length >= 3) return state;
   const next = included ? current.filter(id => id !== taskId) : [...current, taskId];
@@ -523,7 +561,7 @@ export function saveWeekReview(state: BoardState, weekStart: string, notes: Pick
       ...state.weekPlans,
       [weekStart]: { ...plan, review: {
         wins: notes.wins.trim(), blockers: notes.blockers.trim(), adjustment: notes.adjustment.trim(),
-        savedAt: now.toISOString(), scoreSnapshot: score
+        savedAt: now.toISOString(), scoreSnapshot: addDaysUTC(weekStart, 6) < brisbaneToday(now) && plan.review?.savedAt ? plan.review.scoreSnapshot : score
       } }
     }
   };

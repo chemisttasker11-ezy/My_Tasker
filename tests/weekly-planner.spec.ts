@@ -1,8 +1,14 @@
+import { CATEGORIES, createTask, initialState } from '../src/model';
+function legacyBoard() {
+  const board = initialState(); board.areas = CATEGORIES; board.weeklyScoreEnabled = true; board.onboardingStep = undefined;
+  board.tasks = Array.from({ length: 26 }, (_, i) => createTask({ id: `notebook-${i + 1}`, title: i === 0 ? 'Tax' : i === 5 ? 'Family time' : `Legacy task ${i + 1}`, category: i === 0 ? 'Finance' : 'Family', lane: i < 4 ? 'urgent' : 'daily' }));
+  return board;
+}
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
   await page.goto('/');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(board => { localStorage.clear(); localStorage.setItem('my-command-centre:v1', JSON.stringify(board)); }, legacyBoard());
   await page.reload();
 });
 

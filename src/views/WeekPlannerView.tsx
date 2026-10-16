@@ -69,7 +69,7 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
       <span className="week-phase">{weekStart === mondayOf(today) ? 'Current week' : isPastWeek ? 'Past week' : 'Coming up'}</span>
     </div>
 
-    <section className="week-overview panel" aria-label="Weekly progress and scoring">
+    {board.weeklyScoreEnabled && <section className="week-overview panel" aria-label="Weekly progress and scoring">
       <div className="week-score-main">
         <span className="week-overline">Your weekly progress</span>
         <WeeklyScoreMeter percent={shownPercent} label="Weighted week score"/>
@@ -82,13 +82,13 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
         <div><CheckCircle2 size={20}/><strong>{summary.finished}</strong><span>Finished</span></div>
         <div><Target size={20}/><strong>{summary.postponed}</strong><span>Postponed</span></div>
       </div>
-    </section>
+    </section>}
 
     <section className="week-days-section" aria-label="Plan by day">
       <div className="week-section-title"><h2>Seven days, one clear plan</h2><p>Choose up to three priorities for each day. Open any task to edit it, or use Calendar to move its date.</p></div>
       <div className="week-days-grid">
         {days.map((date, index) => {
-          const focusIds = board.dailyFocus?.[date] ?? [];
+          const focusIds = (board.dailyFocus?.[date] ?? []).filter(id => board.tasks.some(t => t.id === id && !t.archivedAt));
           const events = byDay.get(date) ?? [];
           return <section key={date} className={`week-day ${date === today ? 'is-today' : ''}`} aria-label={`${DAYS[index]}, ${formatDate(date)}`}>
             <div className="week-day-head">
@@ -103,7 +103,7 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
                 return <article className={`week-task status-${status}`} key={`${item.task.id}-${item.date}`}>
                   <button type="button" className="week-task-title" onClick={() => onEdit(item.task)}>
                     <strong>{item.task.title}</strong>
-                    <small>{item.task.scheduledTime ? `${item.task.scheduledTime} · ` : ''}{STATUS_LABEL[status]} · {STATUS_POINTS[status]} pts</small>
+                    <small>{item.task.scheduledTime ? `${item.task.scheduledTime} · ` : ''}{STATUS_LABEL[status]}{board.weeklyScoreEnabled ? ` / ${STATUS_POINTS[status]} pts` : ''}</small>
                   </button>
                   <div className="week-task-controls">
                     <button type="button" className={`week-focus-toggle ${pinned ? 'is-selected' : ''}`}
@@ -126,16 +126,16 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
 
     <div className="week-bottom-grid">
       <section className="panel week-commitments" aria-label="Committed tasks">
-        <header className="week-panel-head"><div><h2>My commitments</h2><p>{summary.planned} selected · Postponed work still counts in this week's score.</p></div><Flag size={19}/></header>
+        <header className="week-panel-head"><div><h2>My commitments</h2><p>{summary.planned} selected{board.weeklyScoreEnabled ? " / Postponed work still counts in this week's score." : ''}</p></div><Flag size={19}/></header>
         {summary.items.length ? <div className="week-commit-list">{summary.items.map(item => <div className="week-commit-row" key={item.commitment.taskId}>
           <span className={`week-status-mark status-${item.status}`} aria-hidden="true"><Circle size={12}/></span>
           <div className="week-commit-details">
             <strong>{item.commitment.title}</strong>
-            <span>{STATUS_LABEL[item.status]} · {item.points} pts · {PRIORITY_WEIGHTS[item.commitment.priority]}× weight{item.commitment.plannedDate ? ` · Planned ${formatDate(item.commitment.plannedDate)}` : ''}</span>
+            <span>{STATUS_LABEL[item.status]}{board.weeklyScoreEnabled ? ` / ${item.points} pts / ${PRIORITY_WEIGHTS[item.commitment.priority]} weight` : ''}{item.commitment.plannedDate ? ` · Planned ${formatDate(item.commitment.plannedDate)}` : ''}</span>
             {item.task && item.commitment.plannedDate && item.task.dueDate !== item.commitment.plannedDate && <small>Now scheduled {item.task.dueDate ? formatDate(item.task.dueDate) : 'without a date'} — still in this plan.</small>}
           </div>
-          <strong className="week-earned-points">{item.earned}/{item.possible}</strong>
-          {item.task && <button type="button" className="week-remove" onClick={() => onInclude(weekStart, item.commitment.taskId, false)} aria-label={`Remove ${item.commitment.title} from weekly plan`}>Remove</button>}
+          {board.weeklyScoreEnabled && <strong className="week-earned-points">{item.earned}/{item.possible}</strong>}
+          <button type="button" className="week-remove" onClick={() => onInclude(weekStart, item.commitment.taskId, false)} aria-label={`Remove ${item.commitment.title} from weekly plan`}>Remove</button>
         </div>)}</div> : <div className="week-empty-commit"><ClipboardList size={26}/><h3>Your plan starts here</h3><p>Scheduled tasks appear below. Add only what you realistically expect to finish.</p></div>}
         <div className="week-pick-list"><h3>Available this week</h3>
           {candidates.slice(0, 12).map(task => <div className="week-pick-row" key={task.id}><span>{task.title}</span><button type="button" onClick={() => onInclude(weekStart, task.id, true)}>Add to plan</button></div>)}
@@ -153,16 +153,16 @@ export function WeekPlannerView({ board, today, navigate, onEdit, onInclude, onF
           <label>What got in the way?<textarea maxLength={1400} rows={3} value={notes.blockers} onChange={event => setNotes(s => ({ ...s, blockers: event.target.value }))} placeholder="Limited time, waiting for a reply…"/></label>
           <label>What will you adjust next week?<textarea maxLength={1400} rows={3} value={notes.adjustment} onChange={event => setNotes(s => ({ ...s, adjustment: event.target.value }))} placeholder="One practical change…"/></label>
           <button className="button button-primary" type="submit" disabled={!summary.planned}>Save weekly review</button>
-          <p className="week-review-footnote">{plan?.review?.savedAt ? 'Review saved. Past weeks show the score captured when you last saved it.' : 'Saving records the current score for future reference.'}</p>
+          <p className="week-review-footnote">{board.weeklyScoreEnabled ? (plan?.review?.savedAt ? 'Review saved. Past weeks show the saved score.' : 'Saving records the current score for future reference.') : 'Your review notes are saved with this week.'}</p>
         </form>
       </section>
     </div>
 
-    <details className="week-scoring-guide panel">
+    {board.weeklyScoreEnabled && <details className="week-scoring-guide panel">
       <summary>How the score works <ChevronRight size={17}/></summary>
       <p>Your weekly score is the weighted average of the status scores for tasks you deliberately committed to. High priority counts 3×, medium 2× and low 1×. Moving or postponing a task does not remove it automatically.</p>
       <div className="week-score-legend"><span>Not started <strong>0</strong></span><span>Started <strong>25</strong></span><span>Progressing <strong>60</strong></span><span>Finished <strong>100</strong></span><span>Postponed <strong>0</strong></span></div>
       <p>Checklist ticks are deliberately separate from status scoring. Finishing any occurrence of a recurring task during the week counts as finished for that weekly commitment.</p>
-    </details>
+    </details>}
   </div>;
 }

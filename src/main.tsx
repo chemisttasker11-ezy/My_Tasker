@@ -7,6 +7,7 @@ import '@fontsource/outfit/700.css';
 import '@fontsource/outfit/800.css';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { DataErrorBoundary } from './components/BoardSafety';
 import './styles.css';
 import './styles/foundations.css';
 import './styles/weekly.css';
@@ -14,6 +15,6 @@ import './styles/energy.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    <DataErrorBoundary><App /></DataErrorBoundary>
   </React.StrictMode>
 );

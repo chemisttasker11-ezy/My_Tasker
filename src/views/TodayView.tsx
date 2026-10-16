@@ -6,13 +6,13 @@ import { STATUS_LABEL, visibleStatus } from '../lib/progress';
 import { STATUS_POINTS } from '../lib/scoring';
 
 interface Props {
-  todayTasks: Task[]; doneToday: number; day: string; allTasks: Task[];
+  scoreEnabled: boolean; todayTasks: Task[]; doneToday: number; day: string; allTasks: Task[];
   focusIds: string[]; completed: (task: Task) => boolean;
   onFocus: (date: string, id: string) => void;
   navigate: (view: View) => void; showEditor: (task: Task | null, lane?: Lane) => void;
   toggleTask: (id: string) => void;
 }
-export function TodayView({ todayTasks, doneToday, day, allTasks, focusIds, completed, onFocus, navigate, showEditor, toggleTask }: Props) {
+export function TodayView({ scoreEnabled, todayTasks, doneToday, day, allTasks, focusIds, completed, onFocus, navigate, showEditor, toggleTask }: Props) {
   const focusTasks = focusIds.map(id => allTasks.find(task => task.id === id && !task.archivedAt)).filter((task): task is Task => Boolean(task));
   const rest = todayTasks.filter(task => !focusIds.includes(task.id)).sort((a, b) => (a.priority === 'high' ? 0 : 1) - (b.priority === 'high' ? 0 : 1));
   const overdue = todayTasks.filter(task => task.dueDate && task.dueDate < day);
@@ -25,9 +25,9 @@ export function TodayView({ todayTasks, doneToday, day, allTasks, focusIds, comp
       </button>
       <button type="button" className="focus-content" onClick={() => showEditor(task)}>
         <strong>{task.title}</strong>
-        <small>{task.category} · {LANE_LABEL[task.lane]}{task.dueDate ? ` · ${formatDate(task.dueDate)}` : ''} · {STATUS_LABEL[status]} ({STATUS_POINTS[status]} pts)</small>
+        <small>{task.category} · {LANE_LABEL[task.lane]}{task.dueDate ? ` · ${formatDate(task.dueDate)}` : ''} · {STATUS_LABEL[status]}{scoreEnabled ? ` (${STATUS_POINTS[status]} pts)` : ''}</small>
       </button>
-      <button type="button" aria-pressed={pinned} disabled={!pinned && focusIds.length >= 3}
+      <button type="button" aria-pressed={pinned} disabled={!pinned && focusTasks.length >= 3}
         className={`today-focus-button ${pinned ? 'selected' : ''}`} onClick={() => onFocus(day, task.id)}
         aria-label={`${pinned ? 'Remove' : 'Add'} ${task.title} ${pinned ? 'from' : 'to'} today's top three`}
         title={pinned ? 'Remove from top three' : 'Add to top three'}><Target size={17}/></button>

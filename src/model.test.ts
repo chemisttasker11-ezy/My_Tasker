@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { brisbaneToday, createTask, initialState, isCompleted, nextDueDate, periodKey, toggleCompletion, validateImported, moveInBoard } from './model';
+import { brisbaneToday, createTask, initialState as emptyState, CATEGORIES, isCompleted, nextDueDate, periodKey, toggleCompletion, validateImported, moveInBoard } from './model';
+
+function initialState() {
+  const board = emptyState();
+  board.areas = CATEGORIES.map(a => ({ ...a }));
+  board.tasks = Array.from({ length: 26 }, (_, i) => createTask({ id: `fixture-${i}`, title: i === 0 ? 'Tax' : i === 5 ? 'Family time' : `Task ${i}`, category: 'Family', lane: i === 5 ? 'daily' : i > 5 ? 'weekly' : 'urgent' }));
+  return board;
+}
 
 describe('periods and recurring completion', () => {
   it('computes Australia/Brisbane date correctly', () => {
@@ -160,5 +167,123 @@ describe('simple statuses, postponing and independent copies', () => {
     data = saveTaskChanges(data, { ...data.tasks[0], description: 'Done, filed.' }, now);
     expect(data.completions).toHaveLength(1);
     expect(data.tasks[0].description).toBe('Done, filed.');
+  });
+});
+
+
+import { loadBoard, writeBoard, preserveRaw, STORAGE_KEY, LIMITS, saveTaskChanges, setWeekCommitment, saveWeekReview, toggleDailyFocus } from './model';
+function memoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return { get length() { return values.size; }, clear: () => values.clear(), key: i => [...values.keys()][i] ?? null,
+    getItem: key => values.get(key) ?? null, setItem: (key, value) => { values.set(key, value); }, removeItem: key => { values.delete(key); } };
+}
+describe('board safety and additive migration', () => {
+  it('starts fresh installs empty with neutral areas, onboarding and scores off', () => {
+    const board = emptyState();
+    expect(board.tasks).toEqual([]);
+    expect(board.areas.map(a => a.id)).toEqual(['Home', 'Health', 'Work', 'People', 'Money', 'Me']);
+    expect(board.weeklyScoreEnabled).toBe(false); expect(board.onboardingStep).toBe(1);
+  });
+  it.each(['{broken', JSON.stringify({ version: 2, tasks: [], completions: [] })])('preserves unsupported or corrupt raw data without overwriting it: %s', raw => {
+    const storage = memoryStorage(); storage.setItem(STORAGE_KEY, raw);
+    expect(loadBoard(storage).recovery).toBeTruthy();
+    expect(storage.getItem(STORAGE_KEY)).toBe(raw);
+    const recoveryKey = Array.from({ length: storage.length }, (_, i) => storage.key(i)!).find(key => key.startsWith(`${STORAGE_KEY}:recovery-`))!;
+    expect(storage.getItem(recoveryKey)).toBe(raw);
+  });
+  it('exposes storage read and recovery-copy failures', () => {
+    const storage = memoryStorage(); storage.setItem(STORAGE_KEY, 'bad');
+    storage.setItem = () => { throw new Error('quota'); };
+    expect(loadBoard(storage)).toMatchObject({ storageError: true, raw: 'bad' });
+    storage.getItem = () => { throw new Error('blocked'); };
+    expect(loadBoard(storage).storageError).toBe(true);
+  });
+  it('trims oversized checklists with a warning and backs up raw before migration writes', () => {
+    const storage = memoryStorage(); const board = emptyState();
+    board.tasks = [createTask({ title: 'Keep me', subtasks: Array.from({ length: 101 }, (_, i) => ({ id: `s${i}`, title: 'Step', done: false })) })];
+    const raw = JSON.stringify(board); storage.setItem(STORAGE_KEY, raw);
+    const loaded = loadBoard(storage);
+    expect(loaded.recovery).toBeUndefined(); expect(loaded.warning).toContain('Checklist');
+    expect(loaded.board.tasks[0].subtasks).toHaveLength(100);
+    writeBoard(raw, loaded.board, storage);
+    expect(Array.from({ length: storage.length }, (_, i) => storage.key(i)!).some(key => key.includes(':backup-') && storage.getItem(key) === raw)).toBe(true);
+  });
+  it('enforces checklist and collection limits while editing', () => {
+    const state = emptyState(); const task = createTask({ title: 'Checklist' }); state.tasks = [task];
+    const draft = { ...task, subtasks: Array.from({ length: 101 }, (_, i) => ({ id: `${i}`, title: 'Step', done: false })) };
+    expect(saveTaskChanges(state, draft)).toBe(state);
+    state.tasks = Array.from({ length: LIMITS.tasks }, (_, i) => ({ ...task, id: `${i}` }));
+    expect(saveTaskChanges(state, { ...task, id: 'new' })).toBe(state);
+    state.dailyFocus = Object.fromEntries(Array.from({ length: LIMITS.focusDates }, (_, i) => [`old${i}`, []]));
+    expect(toggleDailyFocus(state, '2026-10-16', '0')).toBe(state);
+    state.weekPlans = Object.fromEntries(Array.from({ length: LIMITS.weeks }, (_, i) => [`old${i}`, { weekStart: '', commitments: [], review: null }]));
+    expect(setWeekCommitment(state, '2026-10-12', task, true)).toBe(state);
+  });
+  it('increments revisions and refuses stale writes without reapplying edits', () => {
+    const storage = memoryStorage(); const first = writeBoard(null, emptyState(), storage);
+    const second = writeBoard(first.raw, { ...first.board, theme: 'dark' }, storage);
+    expect(second.board.revision).toBe(2);
+    expect(() => writeBoard(first.raw, { ...first.board, tasks: [createTask({ title: 'Stale' })] }, storage)).toThrow('conflict');
+    expect(loadBoard(storage).board.tasks).toEqual([]); expect(storage.getItem(STORAGE_KEY)).toBe(second.raw);
+  });
+  it('backs up the exact current payload and exposes write failures', () => {
+    const storage = memoryStorage(); const raw = JSON.stringify(initialState()); storage.setItem(STORAGE_KEY, raw);
+    const key = preserveRaw(raw, 'backup', storage); expect(storage.getItem(key)).toBe(raw);
+    expect(preserveRaw('second', 'backup', storage)).not.toBe(key);
+    storage.setItem = () => { throw new Error('quota'); };
+    expect(() => writeBoard(raw, initialState(), storage)).toThrow('quota');
+    expect(storage.getItem(STORAGE_KEY)).toBe(raw);
+  });
+  it.each(['createdAt', 'updatedAt', 'completedAt', 'archivedAt'])('rejects nonfinite task %s timestamps', field => {
+    const board = initialState(); (board.tasks[0] as unknown as Record<string, unknown>)[field] = 'not-a-date';
+    expect(() => validateImported(board)).toThrow('invalid tasks');
+  });
+  it('rejects nonfinite completion and review timestamps', () => {
+    let board = initialState(); board = toggleCompletion(board, board.tasks[0].id);
+    board.completions[0].completedAt = 'not-a-date'; expect(() => validateImported(board)).toThrow('history');
+    board = initialState(); board = setWeekCommitment(board, '2026-10-12', board.tasks[0], true);
+    board = saveWeekReview(board, '2026-10-12', { wins: '', blockers: '', adjustment: '' }, 60);
+    board.weekPlans['2026-10-12'].review!.savedAt = 'not-a-date'; expect(() => validateImported(board)).toThrow('review');
+  });
+  it('regenerates duplicate checklist IDs including after truncation', () => {
+    const board = emptyState(); board.tasks = [createTask({ title: 'Steps', subtasks: ['same', 'same', 'x'.repeat(101), 'x'.repeat(102)].map(id => ({ id, title: 'Step', done: false })) })];
+    const imported = validateImported(board); expect(new Set(imported.tasks[0].subtasks.map(s => s.id)).size).toBe(4);
+  });
+  it('migrates an original backup without areas and retains tasks, history and legacy areas', () => {
+    let board = initialState(); board = toggleCompletion(board, board.tasks[0].id);
+    const old = { ...board, areas: undefined, weekPlans: undefined, dailyFocus: undefined, weeklyScoreEnabled: undefined, revision: undefined, onboardingStep: undefined };
+    const imported = validateImported(old);
+    expect(imported.tasks).toEqual(board.tasks); expect(imported.completions).toEqual(board.completions);
+    expect(imported.areas).toEqual(CATEGORIES); expect(imported.onboardingStep).toBeUndefined();
+    const storage = memoryStorage(); storage.setItem(STORAGE_KEY, JSON.stringify(old)); expect(loadBoard(storage).board.tasks).toEqual(board.tasks);
+  });
+  it('enables score for legacy commitments/reviews and preserves data when explicitly disabled', () => {
+    let board = initialState(); board = setWeekCommitment(board, '2026-10-12', board.tasks[0], true);
+    board = saveWeekReview(board, '2026-10-12', { wins: 'Kept', blockers: '', adjustment: '' }, 60);
+    expect(validateImported({ ...board, weeklyScoreEnabled: undefined }).weeklyScoreEnabled).toBe(true);
+    expect(validateImported({ ...board, weeklyScoreEnabled: false }).weekPlans).toEqual(board.weekPlans);
+    expect(validateImported({ ...board, weeklyScoreEnabled: false }).weeklyScoreEnabled).toBe(false);
+    board.weekPlans['2026-10-12'].commitments = [];
+    expect(validateImported({ ...board, weeklyScoreEnabled: undefined }).weeklyScoreEnabled).toBe(true);
+  });
+  it('clears completedAt when reopening a finished task in the editor', () => {
+    const state = initialState(); const done = toggleCompletion(state, state.tasks[0].id);
+    const reopened = saveTaskChanges(done, { ...done.tasks[0], status: 'started' });
+    expect(reopened.tasks[0].completedAt).toBe(''); expect(reopened.completions).toEqual([]);
+  });
+  it('releases archived focus slots, removes missing commitments and preserves past review scores', () => {
+    let state = initialState(); const date = '2026-10-16';
+    state.dailyFocus[date] = state.tasks.slice(0, 3).map(t => t.id); state.tasks[0].archivedAt = new Date().toISOString();
+    state = toggleDailyFocus(state, date, state.tasks[3].id); expect(state.dailyFocus[date]).toHaveLength(3); expect(state.dailyFocus[date]).not.toContain(state.tasks[0].id);
+    state = setWeekCommitment(state, '2026-10-12', state.tasks[1], true);
+    state = saveWeekReview(state, '2026-10-12', { wins: 'First', blockers: '', adjustment: '' }, 60, new Date('2026-10-16T00:00Z'));
+    state = saveWeekReview(state, '2026-10-12', { wins: 'Edited', blockers: '', adjustment: '' }, 0, new Date('2026-11-01T00:00Z'));
+    expect(state.weekPlans['2026-10-12'].review?.scoreSnapshot).toBe(60);
+    const deleted = state.tasks[1]; state.tasks = state.tasks.filter(t => t.id !== deleted.id);
+    state = setWeekCommitment(state, '2026-10-12', deleted, false); expect(state.weekPlans['2026-10-12'].commitments).toEqual([]);
+  });
+  it('advances decades-old recurrence anchors past the target', () => {
+    expect(nextDueDate('2000-01-01', 'daily', '2026-10-16')).toBe('2026-10-17');
+    expect(nextDueDate('2000-01-31', 'monthly', '2026-10-16')).toBe('2026-10-31');
   });
 });
