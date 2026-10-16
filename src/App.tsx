@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
+import { usePlanningController } from './hooks/usePlanningController';
 import { Archive, CalendarDays, CalendarRange, BarChart3, Check, CheckCircle2, ChevronRight, LayoutDashboard, ListTodo, Menu, Moon, Plus, Settings2, Sparkles, Sun, Target, X } from 'lucide-react';
-import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, readState, rescheduleTask, saveTaskChanges, saveWeekReview, setTaskStatus, setWeekCommitment, toggleCompletion, toggleDailyFocus, validateImported } from './model';
+import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, STORAGE_KEY, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, readState, rescheduleTask, saveTaskChanges, setTaskStatus, toggleCompletion, validateImported } from './model';
 import { activeItem, downloadable, LANE_LABEL, longToday } from './lib/display';
 import { TaskModal } from './components/TaskModal';
 import { OverviewView } from './views/OverviewView';
@@ -17,8 +18,7 @@ import { visibleStatus } from './lib/progress';
 import { mondayOf } from './lib/calendar';
 import { scoreWeek } from './lib/scoring';
 import { WeekPlannerView } from './views/WeekPlannerView';
-import { addEntry, cloneEntry, moveEntry, editEntry, removeEntry, toggleEntryStep, copyDays, pasteDays, setWeekCapacity, type DayClipboard } from './lib/planning';
-import type { PlanningActions } from './components/PlanWorkspace';
+import { editEntry } from './lib/planning';
 import { LibraryView } from './views/LibraryView';
 import { QuotesView } from './views/QuotesView';
 import type { TrackerLaunch } from './views/TrackerView';
@@ -61,7 +61,6 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const [mobileNav, setMobileNav] = useState(false);
   const [notice, setNotice] = useState('');
   const [saveError, setSaveError] = useState(false);
-  const [dayClipboard, setDayClipboard] = useState<DayClipboard | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const day = brisbaneToday();
   const [trackerLaunch, setTrackerLaunch] = useState<TrackerLaunch>({ anchor: day, scale: 'day' });
@@ -104,45 +103,8 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     setBoard(s => setTaskStatus(s, id, status, postponedTo));
     alertNotice(status === 'postponed' ? 'Task postponed to its new date' : `Status updated`);
   }
-  function includeInWeek(weekStart: string, id: string, include: boolean) {
-    const task = board.tasks.find(item => item.id === id);
-    if (!task) return;
-    setBoard(state => setWeekCommitment(state, weekStart, task, include));
-    alertNotice(include ? 'Added to weekly commitments' : 'Removed from weekly commitments');
-  }
-  function chooseDailyFocus(date: string, id: string) {
-    const selected = board.dailyFocus?.[date] ?? [];
-    if (!selected.includes(id) && selected.length >= 3) {
-      alertNotice('Choose no more than three priorities per day');
-      return;
-    }
-    setBoard(state => toggleDailyFocus(state, date, id));
-    alertNotice(selected.includes(id) ? 'Removed from daily priorities' : 'Added to daily priorities');
-  }
-  function saveReview(weekStart: string, notes: { wins: string; blockers: string; adjustment: string }) {
-    setBoard(state => {
-      const percent = scoreWeek(state.weekPlans?.[weekStart], state, weekStart, brisbaneToday()).percent;
-      return saveWeekReview(state, weekStart, notes, percent);
-    });
-    alertNotice('Weekly review saved');
-  }
-  const planActions: PlanningActions = {
-    add: (id, date) => { setBoard(s => addEntry(s,id,date)); alertNotice('Added an independent copy to your plan'); },
-    clone: (id, date) => { setBoard(s => cloneEntry(s,id,date)); alertNotice('Duplicated plan task'); },
-    move: (id, date, index) => setBoard(s => moveEntry(s,id,date,index)),
-    update: (id, patch) => setBoard(s => editEntry(s,id,patch)),
-    remove: id => { setBoard(s => removeEntry(s,id)); alertNotice('Removed from day; board task preserved'); },
-    toggleStep: (id, step) => setBoard(s => toggleEntryStep(s,id,step)),
-    copy: dates => { setDayClipboard(copyDays(board,dates)); alertNotice('Days copied. Select destination day(s) and Paste.'); },
-    paste: (dates,mode) => {
-      if (!dayClipboard) return;
-      const next = pasteDays(board,dayClipboard,dates,mode);
-      if(next === board) { alertNotice('Choose matching dates: 1 source to many, same count, or multiple days to one starting date.');return; }
-      setBoard(next); alertNotice('Day plan pasted with independent task progress');
-    },
-    clipboard: dayClipboard,
-    focus: chooseDailyFocus
-  };
+  const { planActions, chooseDailyFocus, includeInWeek, saveReview, setCapacity } =
+    usePlanningController(board, setBoard, alertNotice);
   function rescheduleCalendarTask(id: string, date: string) {
     setBoard(s => rescheduleTask(s, id, date));
     alertNotice(date ? 'Calendar date updated' : 'Removed from calendar; still on task board');
@@ -265,7 +227,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
         {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={openDailyTask} completed={completed} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore}/>}
         {view === 'board' && <BoardView visible={visible} search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} selectedLane={selectedLane} setSelectedLane={setSelectedLane} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask} moveTask={moveTask} archiveTask={archiveTask} duplicateTask={duplicateTask} changeStatus={changeStatus} toggleSubtask={toggleSubtask}/>}
         {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={openDailyTask} toggleTask={toggleTask} allTasks={[...board.tasks, ...todayCopies]} completed={completed} focusIds={board.dailyFocus?.[day] ?? []} onFocus={chooseDailyFocus}/>}
-        {view === 'week' && <WeekPlannerView board={board} planActions={planActions} onCapacity={(date,hours,intention)=>setBoard(s=>setWeekCapacity(s,date,hours,intention))} today={day} navigate={navigate} onEdit={showEditor} onInclude={includeInWeek} onFocus={chooseDailyFocus} onReview={saveReview}/>}
+        {view === 'week' && <WeekPlannerView board={board} planActions={planActions} onCapacity={setCapacity} today={day} navigate={navigate} onEdit={showEditor} onInclude={includeInWeek} onFocus={chooseDailyFocus} onReview={saveReview}/>}
         {view === 'calendar' && <CalendarView board={board} planActions={planActions} tasks={board.tasks} completions={board.completions} today={day} onEdit={showEditor} onDuplicate={duplicateTask} onStatus={changeStatus} onReschedule={rescheduleCalendarTask} onTracker={launch => { setTrackerLaunch(launch); navigate('tracker'); }}/>}
         {view === 'upcoming' && <UpcomingView active={active} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask}/>}
         {view === 'goals' && <GoalsView goals={goals} showEditor={showEditor}/>}
