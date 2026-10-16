@@ -1,8 +1,9 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
-import { type Category, type Lane, type Priority, type Task, type TaskStatus, type View, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, moveInBoard, rescheduleTask, saveTaskChanges, setTaskStatus, toggleCompletion, validateImported } from './model';
-import { activeItem, downloadable, LANE_LABEL } from './lib/display';
+import { createTaskController } from './controllers/taskController';
+import { type Category, type Lane, type Priority, type Task, type View, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
+import { activeItem, downloadable } from './lib/display';
 import { TaskModal } from './components/TaskModal';
 import { OverviewView } from './views/OverviewView';
 import { BoardView } from './views/BoardView';
@@ -17,7 +18,6 @@ import { visibleStatus } from './lib/progress';
 import { mondayOf } from './lib/calendar';
 import { scoreWeek } from './lib/scoring';
 import { WeekPlannerView } from './views/WeekPlannerView';
-import { editEntry } from './lib/planning';
 import { LibraryView } from './views/LibraryView';
 import { QuotesView } from './views/QuotesView';
 import type { TrackerLaunch } from './views/TrackerView';
@@ -86,54 +86,15 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: 'smooth' }); }
   function showEditor(task: Task | null, lane: Lane = 'urgent', date = '') { setEditor({ task, lane, date }); }
   function duplicateTask(task: Task) { setEditor({ task: cloneTask(task), lane: task.lane, isCopy: true }); }
-  function saveTask(task: Task) {
-    setBoard(s => saveTaskChanges(s, task));
-    setEditor(null); alertNotice('Task saved');
-  }
-  function changeStatus(id: string, status: TaskStatus, postponedTo?: string) {
-    setBoard(s => setTaskStatus(s, id, status, postponedTo));
-    alertNotice(status === 'postponed' ? 'Task postponed to its new date' : `Status updated`);
-  }
   const { planActions, chooseDailyFocus, includeInWeek, saveReview, setCapacity } =
     usePlanningController(board, setBoard, alertNotice);
-  function rescheduleCalendarTask(id: string, date: string) {
-    setBoard(s => rescheduleTask(s, id, date));
-    alertNotice(date ? 'Calendar date updated' : 'Removed from calendar; still on task board');
-  }
-  function moveTask(id: string, lane: Lane, overId?: string) {
-    setBoard(state => moveInBoard(state, id, lane, overId));
-    alertNotice(`Moved to ${LANE_LABEL[lane]}`);
-  }
-  function archiveTask(id: string) {
-    const task = board.tasks.find(t => t.id === id);
-    if (!task || !window.confirm(`Archive “${task.title}”? You can restore it from Archived tasks.`)) return;
-    setBoard(s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, archivedAt: new Date().toISOString() } : t) }));
-    alertNotice('Task archived');
-  }
-  function restoreArchived(id: string) {
-    setBoard(s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, archivedAt: '' } : t) }));
-    alertNotice('Task restored');
-  }
-  function deleteArchived(id: string) {
-    const task = board.tasks.find(t => t.id === id);
-    if (!task?.archivedAt || !window.confirm(`Permanently delete “${task.title}” and its completion history? This cannot be undone.`)) return;
-    setBoard(s => ({ ...s, tasks: s.tasks.filter(t => t.id !== id), completions: s.completions.filter(c => c.taskId !== id) }));
-    alertNotice('Archived task deleted');
-  }
-  function toggleTask(id: string) {
-    setBoard(s => {
-      const planned = s.plannedEntries.find(e => e.id === id);
-      return planned ? editEntry(s, id, { status: planned.status === 'finished' ? 'not-started' : 'finished' }) : toggleCompletion(s, id);
-    });
-    alertNotice('Progress updated');
-  }
+  const { saveTask, changeStatus, rescheduleCalendarTask, moveTask,
+    archiveTask, restoreArchived, deleteArchived, toggleTask, toggleSubtask } =
+    createTaskController(board, setBoard, alertNotice, () => setEditor(null));
   function openDailyTask(task: Task | null, lane: Lane = 'urgent') {
     if (!task) { showEditor(null, lane); return; }
     if (board.plannedEntries.some(entry => entry.id === task.id)) navigate('today');
     else showEditor(task);
-  }
-  function toggleSubtask(taskId: string, subtaskId: string) {
-    setBoard(s => ({ ...s, tasks: s.tasks.map(t => t.id !== taskId ? t : { ...t, updatedAt: new Date().toISOString(), subtasks: t.subtasks.map(st => st.id === subtaskId ? { ...st, done: !st.done } : st) }) }));
   }
   function exportData() { downloadable(`my-command-centre-${day}.json`, JSON.stringify(board, null, 2)); alertNotice('Backup downloaded'); }
   async function importData(file: File | undefined) {
