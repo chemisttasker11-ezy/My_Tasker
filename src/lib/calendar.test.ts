@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTask, initialState, rescheduleTask, setTaskStatus } from '../model';
-import { addDays, addMonths, calendarOccurrences, mondayOf, shiftCalendar, visibleRange } from './calendar';
+import { addDays, addMonths, calendarOccurrences, mondayOf, setCalendarOccurrenceStatus, shiftCalendar, visibleRange } from './calendar';
 
 describe('calendar: day, week, month and year', () => {
   it('uses Brisbane dates and Monday-start weeks', () => {
@@ -37,5 +37,20 @@ describe('calendar: day, week, month and year', () => {
     const cleared = rescheduleTask(moved, task.id, '');
     expect(cleared.tasks[0].subtasks).toHaveLength(1);
     expect(calendarOccurrences(cleared.tasks, [], '2026-01-01', '2026-12-31')).toHaveLength(0);
+  });
+  it('CR-7: status changes on a calendar occurrence use that occurrence date for the completion period', () => {
+    const task = createTask({ title: 'Weekly review', lane: 'weekly', recurrence: 'weekly', dueDate: '2026-10-12' });
+    let state = { ...initialState(), tasks: [task] };
+    // Complete the occurrence on 2026-10-19
+    state = setCalendarOccurrenceStatus(state, task.id, 'finished', undefined, '2026-10-19');
+    const occ = calendarOccurrences(state.tasks, state.completions, '2026-10-12', '2026-10-26');
+    expect(occ.find(o => o.date === '2026-10-12')?.completed).toBe(false);
+    expect(occ.find(o => o.date === '2026-10-19')?.completed).toBe(true);
+    expect(occ.find(o => o.date === '2026-10-26')?.completed).toBe(false);
+    expect(state.completions.some(c => c.taskId === task.id && c.periodKey === '2026-10-19')).toBe(true);
+    // Reopening that occurrence clears only that occurrence period's completion
+    state = setCalendarOccurrenceStatus(state, task.id, 'started', undefined, '2026-10-19');
+    const reopenedOcc = calendarOccurrences(state.tasks, state.completions, '2026-10-12', '2026-10-26');
+    expect(reopenedOcc.find(o => o.date === '2026-10-19')?.completed).toBe(false);
   });
 });

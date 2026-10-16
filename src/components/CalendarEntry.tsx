@@ -10,7 +10,7 @@ interface Props {
   compact?: boolean;
   onEdit: (task: Task) => void;
   onDuplicate: (task: Task) => void;
-  onStatus: (id: string, status: TaskStatus, date?: string) => void;
+  onStatus: (id: string, status: TaskStatus, date?: string, occurrenceDate?: string) => void;
   onUnschedule: (task: Task) => void;
 }
 
@@ -39,7 +39,7 @@ export function CalendarEntry({ occurrence, compact = false, onEdit, onDuplicate
       <button type="button" className="icon-button small" draggable onDragStart={drag} title="Drag to another day" aria-label={`Drag ${task.title} to another date`}><GripVertical size={16}/></button>
     </div>
     <div className="calendar-entry-bottom">
-      <TaskStatusPicker title={task.title} dueDate={task.dueDate} value={status} onChange={(next, date) => onStatus(task.id, next, date)} compact />
+      <TaskStatusPicker title={task.title} dueDate={task.dueDate} value={status} onChange={(next, date) => onStatus(task.id, next, date, occurrence.date)} compact />
       {steps && <span className="calendar-entry-steps">{steps.done}/{steps.total} steps</span>}
       <div className="calendar-entry-actions">
         <button type="button" onClick={() => onEdit(task)} aria-label={`Edit ${task.title}`} title="Edit"><Pencil size={15}/></button>

@@ -1,7 +1,7 @@
 import { useAreas } from '../lib/areas';
 import type { TrackerLaunch } from './TrackerView';
 import { useMemo, useState, type DragEvent } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, FileText, Plus, Search, X } from 'lucide-react';
 import { type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
 import { addDays, calendarOccurrences, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
 import { formatDate } from '../lib/display';
@@ -21,7 +21,7 @@ interface Props {
   today: string;
   onEdit: (task: Task | null, lane?: Lane, defaultDate?: string) => void;
   onDuplicate: (task: Task) => void;
-  onStatus: (id: string, status: TaskStatus, postponedTo?: string) => void;
+  onStatus: (id: string, status: TaskStatus, postponedTo?: string, occurrenceDate?: string) => void;
   onReschedule: (id: string, date: string) => void;
 }
 
@@ -65,25 +65,167 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
   const otherHours = withTime.filter(item => { const h = Number(item.task.scheduledTime.slice(0, 2)); return h < 6 || h > 22; });
 
   return <>
+    <style>{`
+      .compact-calendar-toolbar .calendar-toolbar-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        width: 100%;
+      }
+      .compact-calendar-toolbar .calendar-tracker-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      @media (min-width: 768px) {
+        .compact-calendar-toolbar {
+          padding: 8px 12px;
+          margin-bottom: 12px;
+          gap: 6px;
+        }
+        .compact-calendar-toolbar .calendar-toolbar-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: nowrap;
+          gap: 8px;
+          width: 100%;
+        }
+        .compact-calendar-toolbar .calendar-navigation {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+        .compact-calendar-toolbar .calendar-navigation h2 {
+          font-size: 15px;
+          margin: 0 0 0 4px;
+          white-space: nowrap;
+        }
+        .compact-calendar-toolbar .calendar-today-button {
+          padding: 4px 8px;
+          font-size: 12px;
+        }
+        .compact-calendar-toolbar .calendar-scale-switch {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+        }
+        .compact-calendar-toolbar .calendar-scale-switch button {
+          padding: 5px 8px;
+          font-size: 12px;
+        }
+        .compact-calendar-toolbar .calendar-filter-row {
+          display: flex;
+          align-items: center;
+          margin: 0;
+          gap: 6px;
+          flex-shrink: 1;
+        }
+        .compact-calendar-toolbar .calendar-filter {
+          width: 95px;
+          height: 32px;
+          padding: 0 6px;
+          gap: 4px;
+          flex-shrink: 1;
+        }
+        .compact-calendar-toolbar .calendar-filter input {
+          font-size: 11px;
+          width: 100%;
+          min-width: 0;
+        }
+        .compact-calendar-toolbar .calendar-filter-select {
+          height: 32px;
+          padding: 0 6px;
+          font-size: 11px;
+          gap: 4px;
+          flex-shrink: 0;
+        }
+        .compact-calendar-toolbar .calendar-filter-select select {
+          padding: 2px 4px;
+          font-size: 11px;
+          max-width: 85px;
+        }
+        .compact-calendar-toolbar .calendar-tracker-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          font-size: 12px;
+          padding: 6px 10px;
+          height: 32px;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+        .compact-calendar-toolbar .calendar-tracker-btn .calendar-tracker-text {
+          display: none;
+        }
+        .compact-calendar-toolbar .calendar-subbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          width: 100%;
+          padding-top: 6px;
+          border-top: 1px solid var(--border);
+          font-size: 11px;
+        }
+        .compact-calendar-toolbar .calendar-legend {
+          margin: 0;
+          gap: 10px;
+        }
+        .compact-calendar-toolbar .calendar-count {
+          font-size: 11px;
+          color: var(--muted);
+          white-space: nowrap;
+        }
+      }
+      @media (min-width: 1024px) {
+        .compact-calendar-toolbar .calendar-toolbar-row {
+          gap: 12px;
+        }
+        .compact-calendar-toolbar .calendar-filter {
+          width: 120px;
+        }
+        .compact-calendar-toolbar .calendar-filter-select select {
+          max-width: 110px;
+        }
+      }
+      @media (min-width: 1200px) {
+        .compact-calendar-toolbar .calendar-tracker-btn .calendar-tracker-text {
+          display: inline;
+        }
+        .compact-calendar-toolbar .calendar-filter {
+          width: 150px;
+        }
+      }
+    `}</style>
     <div className="page-title-row calendar-page-title"><div><span className="eyebrow">MAKE TIME FOR WHAT MATTERS</span><h1>Calendar <span className="heading-sparkle">✳</span></h1><p>Your tasks and appointments, on the dates you choose. Undated tasks stay unscheduled.</p></div><button className="button button-primary" onClick={() => addAt(anchor)}><Plus size={17}/> Add on {formatDate(anchor)}</button></div>
-    <section className="calendar-toolbar panel" aria-label="Calendar controls">
-      <button className="button button-primary" onClick={() => onTracker({ anchor, scale, area: category })}>One-page view & PDF</button>
-      <div className="calendar-navigation">
-        <button className="icon-button" aria-label="Previous period" onClick={() => setAnchor(value => shiftCalendar(value, scale, -1))}><ChevronLeft size={20}/></button>
-        <button className="button button-secondary calendar-today-button" onClick={() => setAnchor(today)}>Today</button>
-        <button className="icon-button" aria-label="Next period" onClick={() => setAnchor(value => shiftCalendar(value, scale, 1))}><ChevronRight size={20}/></button>
-        <h2>{dateTitle(anchor, scale)}</h2>
+    <section className="calendar-toolbar panel compact-calendar-toolbar" aria-label="Calendar controls">
+      <div className="calendar-toolbar-row">
+        <div className="calendar-navigation">
+          <button className="icon-button" aria-label="Previous period" onClick={() => setAnchor(value => shiftCalendar(value, scale, -1))}><ChevronLeft size={20}/></button>
+          <button className="button button-secondary calendar-today-button" onClick={() => setAnchor(today)}>Today</button>
+          <button className="icon-button" aria-label="Next period" onClick={() => setAnchor(value => shiftCalendar(value, scale, 1))}><ChevronRight size={20}/></button>
+          <h2>{dateTitle(anchor, scale)}</h2>
+        </div>
+        <div className="calendar-scale-switch" role="group" aria-label="Calendar view">
+          {SCALES.map(item => <button key={item.id} type="button" aria-pressed={scale === item.id} className={scale === item.id ? 'selected' : ''} onClick={() => setScale(item.id)}>{item.label}</button>)}
+        </div>
+        <div className="calendar-filter-row">
+          <label className="calendar-filter"><Search size={16}/><input aria-label="Search calendar tasks" placeholder="Find a scheduled task" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button aria-label="Clear calendar search" onClick={() => setSearch('')}><X size={15}/></button>}</label>
+          <label className="calendar-filter-select">Area <select aria-label="Calendar category" value={category} onChange={e => setCategory(e.target.value as Category | 'All')}><option value="All">All areas</option>{areas.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}</select></label>
+        </div>
+        <button className="button button-primary calendar-tracker-btn" aria-label="One-page view & PDF" title="One-page view & PDF" onClick={() => onTracker({ anchor, scale, area: category })}>
+          <FileText size={16} aria-hidden="true" />
+          <span className="calendar-tracker-text">One-page view & PDF</span>
+        </button>
       </div>
-      <div className="calendar-scale-switch" role="group" aria-label="Calendar view">
-        {SCALES.map(item => <button key={item.id} type="button" aria-pressed={scale === item.id} className={scale === item.id ? 'selected' : ''} onClick={() => setScale(item.id)}>{item.label}</button>)}
+      <div className="calendar-subbar">
+        <div className="calendar-legend" aria-label="Task status legend">{STATUS_ORDER.map(status => <span key={status}><span className={`calendar-status-dot status-${status}`}/>{STATUS_LABEL[status]}</span>)}</div>
+        <span className="calendar-count">{occurrences.length} scheduled {occurrences.length === 1 ? 'occurrence' : 'occurrences'} shown</span>
       </div>
     </section>
-    <div className="calendar-filter-row">
-      <label className="calendar-filter"><Search size={16}/><input aria-label="Search calendar tasks" placeholder="Find a scheduled task" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button aria-label="Clear calendar search" onClick={() => setSearch('')}><X size={15}/></button>}</label>
-      <label className="calendar-filter-select">Area <select aria-label="Calendar category" value={category} onChange={e => setCategory(e.target.value as Category | 'All')}><option value="All">All areas</option>{areas.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}</select></label>
-      <span className="calendar-count">{occurrences.length} scheduled {occurrences.length === 1 ? 'occurrence' : 'occurrences'} shown</span>
-    </div>
-    <div className="calendar-legend" aria-label="Task status legend">{STATUS_ORDER.map(status => <span key={status}><span className={`calendar-status-dot status-${status}`}/>{STATUS_LABEL[status]}</span>)}</div>
     <div className="calendar-layout">
       <div className="calendar-main">
         {scale === 'day' && <section className="panel calendar-day">

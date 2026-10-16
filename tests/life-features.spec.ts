@@ -123,3 +123,59 @@ test('new screens fit narrow and wide viewports in both colour themes', async ({
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 2)).toBe(true);
   }
 });
+
+test('tracker text alternative includes status and checklist ticks (CR-18)', async ({ page }) => {
+  await navigate(page, 'Life task library');
+  await page.getByRole('button', { name: 'Add starter set (12)' }).click();
+  await navigate(page, 'Printable tracker');
+  await page.getByLabel('Include checklists').check();
+  const details = page.locator('details.tracker-text');
+  await details.locator('summary').click();
+  await expect(details.getByText(/Status: (Not started|Started|Progressing|Finished)/).first()).toBeVisible();
+  await expect(details.getByText(/(\[✓\]|\[ \]).*(done|incomplete)/).first()).toBeVisible();
+});
+
+test('tracker warns on unsupported characters and substitutes visible placeholder', async ({ page }) => {
+  await navigate(page, 'My task board');
+  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Task name' }).fill('Task with emoji 🚀 and non-Latin привет');
+  await page.getByRole('button', { name: 'Create task' }).click();
+  await navigate(page, 'Printable tracker');
+  await expect(page.getByRole('alert')).toContainText(/Some text includes characters/);
+  await expect(page.getByRole('alert')).toContainText('🚀');
+});
+
+test('calendar controls collapse into compact toolbar on >=768px (DC-8)', async ({ page }) => {
+  await navigate(page, 'Calendar');
+  const toolbar = page.locator('.compact-calendar-toolbar');
+  await expect(toolbar).toBeVisible();
+
+  for (const width of [768, 1024]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(toolbar.getByRole('button', { name: 'One-page view & PDF' })).toBeVisible();
+    await expect(toolbar.getByRole('group', { name: 'Calendar view' })).toBeVisible();
+    await expect(toolbar.getByRole('textbox', { name: 'Search calendar tasks' })).toBeVisible();
+
+    // All toolbar controls share one row (same offsetTop within 4px)
+    const offsets = await toolbar.locator('.calendar-toolbar-row > *').evaluateAll(elements =>
+      elements.map(el => (el as HTMLElement).offsetTop)
+    );
+    expect(offsets.length).toBe(4);
+    const minTop = Math.min(...offsets);
+    const maxTop = Math.max(...offsets);
+    expect(maxTop - minTop).toBeLessThanOrEqual(4);
+
+    const controlOffsets = await toolbar.locator('.calendar-navigation, .calendar-scale-switch, .calendar-filter, .calendar-filter-select, .calendar-tracker-btn').evaluateAll(elements =>
+      elements.map(el => (el as HTMLElement).offsetTop)
+    );
+    const minCtrlTop = Math.min(...controlOffsets);
+    const maxCtrlTop = Math.max(...controlOffsets);
+    expect(maxCtrlTop - minCtrlTop).toBeLessThanOrEqual(4);
+  }
+
+  const grid = page.locator('.calendar-month-grid');
+  const gridBox = await grid.boundingBox();
+  expect(gridBox).not.toBeNull();
+  expect(gridBox!.y).toBeLessThan(450);
+});
+

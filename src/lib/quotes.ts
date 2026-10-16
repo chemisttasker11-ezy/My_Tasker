@@ -1,4 +1,5 @@
-import type { Task } from '../model';
+import { isCompleted, type BoardState, type Task } from '../model';
+import { calendarOccurrences } from './calendar';
 
 export interface Quote { id: string; text: string; theme: string }
 export interface QuoteSettings { direction: string; custom: Quote[]; daily: Record<string, string> }
@@ -46,4 +47,27 @@ export function dailyQuote(settings: QuoteSettings | undefined, date: string, ta
   const options = QUOTE_LIBRARY.filter(item => item.theme === theme);
   const seed = [...date].reduce((sum, ch) => sum * 31 + ch.charCodeAt(0) >>> 0, 0);
   return { text: options[seed % options.length].text, theme, custom: false };
+}
+
+/** Deterministic helper returning active, uncompleted tasks relevant to a specific calendar date (CR-quote).
+ * Considers daily routines, tasks due on or before the date, and recurring instances projected to that date.
+ */
+export function relevantTasksForDate(board: BoardState, date: string): Task[] {
+  if (!board || !Array.isArray(board.tasks)) return [];
+  const completions = board.completions ?? [];
+  return board.tasks.filter(task => {
+    if (task.archivedAt) return false;
+    if (isCompleted(task, completions, date)) return false;
+    // Exclude postponed tasks only while their postponed date is in the future relative to `date`
+    if (task.status === 'postponed' && task.dueDate && task.dueDate > date) return false;
+    // Daily routines belong to every day
+    if (task.lane === 'daily' || task.recurrence === 'daily') return true;
+    // Tasks scheduled on or overdue by this date
+    if (task.dueDate && task.dueDate <= date) return true;
+    // Repeating task occurrence on this specific date
+    if (task.recurrence !== 'none' && calendarOccurrences([task], completions, date, date).length > 0) return true;
+    // Undated urgent tasks on the board represent immediate priorities
+    if (task.lane === 'urgent' && !task.dueDate) return true;
+    return false;
+  });
 }

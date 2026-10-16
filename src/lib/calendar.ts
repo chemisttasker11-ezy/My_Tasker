@@ -1,10 +1,24 @@
-import { periodKey, type Completion, type Recurrence, type Task } from '../model';
+import { periodKey, setTaskStatus, type BoardState, type Completion, type Recurrence, type Task, type TaskStatus } from '../model';
 
 export type CalendarScale = 'day' | 'week' | 'month' | 'year';
 export interface CalendarOccurrence {
   task: Task;
   date: string;
   completed: boolean;
+}
+
+/** Updates a task's status for a specific calendar occurrence date, ensuring completion
+ * history is recorded against the occurrence's period instead of today (CR-7).
+ */
+export function setCalendarOccurrenceStatus(
+  state: BoardState,
+  id: string,
+  status: TaskStatus,
+  postponedTo?: string,
+  occurrenceDate?: string
+): BoardState {
+  const atDate = occurrenceDate ? dateUTC(occurrenceDate) : undefined;
+  return setTaskStatus(state, id, status, postponedTo, atDate);
 }
 
 const DAY_MS = 86400000;

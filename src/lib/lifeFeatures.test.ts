@@ -1,11 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { createTask, duplicateTask, initialState, toggleCompletion, validateImported } from '../model';
 import { addLifeTemplates, LIFE_TEMPLATES, STARTER_IDS } from './lifeLibrary';
 import { changeArea, removeArea } from './areas';
-import { dailyQuote, QUOTE_LIBRARY, quoteSettings } from './quotes';
+import { dailyQuote, QUOTE_LIBRARY, quoteSettings, relevantTasksForDate } from './quotes';
 import { trackerData, type TrackerOptions } from './tracker';
+import {
+  allocateTrackerSpace,
+  buildTrackerDocument,
+  detectTrackerUnsupported,
+  detectUnsupportedCharacters,
+  formatOmissionWarning,
+  hasUnsupportedCharacters,
+  isSupportedPdfChar,
+  sanitizePdfText,
+  setTrackerFontsForTesting
+} from './trackerPdf';
 
 const options: TrackerOptions = { anchor: '2026-10-16', scale: 'day', area: 'All', includeUndated: true, includeChecklist: true, paper: 'a4' };
+
+beforeAll(() => {
+  const regPath = path.resolve(process.cwd(), 'public/fonts/nunito-sans-400.ttf');
+  const boldPath = path.resolve(process.cwd(), 'public/fonts/nunito-sans-700.ttf');
+  setTrackerFontsForTesting(
+    fs.readFileSync(regPath).toString('base64'),
+    fs.readFileSync(boldPath).toString('base64')
+  );
+});
 
 describe('life library and saved board compatibility', () => {
   it('adds a detailed starter set once, preserving all existing records and progress', () => {
@@ -85,4 +107,204 @@ describe('quotes and tracker content', () => {
     expect(trackerData(board, options).undated.find(t => t.task.id === 'notebook-6')?.completed).toBe(true);
     expect(trackerData(board, { ...options, anchor: '2026-10-17' }).undated.find(t => t.task.id === 'notebook-6')?.completed).toBe(false);
   });
+  it('determines relevant tasks for a date deterministically and preserves user-chosen daily quotes', () => {
+    const taskDaily = createTask({ title: 'Morning meditation', lane: 'daily', category: 'Health' });
+    const taskFamily = createTask({ title: 'Family dinner', dueDate: '2026-10-16', category: 'Family' });
+    const taskFuture = createTask({ title: 'Future project', dueDate: '2026-10-25', category: 'Work' });
+    const taskPostponed = createTask({ title: 'Postponed chore', status: 'postponed', dueDate: '2026-10-20' });
+    const board = {
+      ...initialState(),
+      tasks: [taskDaily, taskFamily, taskFuture, taskPostponed]
+    };
+    const relevantToday = relevantTasksForDate(board, '2026-10-16');
+    expect(relevantToday.some(t => t.id === taskDaily.id)).toBe(true);
+    expect(relevantToday.some(t => t.id === taskFamily.id)).toBe(true);
+    expect(relevantToday.some(t => t.id === taskFuture.id)).toBe(false);
+    expect(relevantToday.some(t => t.id === taskPostponed.id)).toBe(false);
+
+    // On 2026-10-20, taskPostponed is no longer in the future relative to that date
+    const relevantPostponedDate = relevantTasksForDate(board, '2026-10-20');
+    expect(relevantPostponedDate.some(t => t.id === taskPostponed.id)).toBe(true);
+
+    // Deterministic check: multiple calls produce identical results
+    expect(relevantTasksForDate(board, '2026-10-16')).toEqual(relevantToday);
+
+    // Suggested quote adapts to the date's relevant tasks (Family dinner -> Connection)
+    const quoteToday = dailyQuote(board.quotes, '2026-10-16', relevantToday);
+    expect(quoteToday.theme).toBe('Connection');
+
+    // User-chosen daily quote always wins over suggested quote
+    const boardWithChosen = {
+      ...board,
+      quotes: { ...quoteSettings(board.quotes), daily: { '2026-10-16': 'My custom day quote' } }
+    };
+    const chosenQuote = dailyQuote(boardWithChosen.quotes, '2026-10-16', relevantToday);
+    expect(chosenQuote.text).toBe('My custom day quote');
+    expect(chosenQuote.custom).toBe(true);
+  });
 });
+
+describe('PDF layout math and CR-10 space allocation', () => {
+  it('allocates day-page space by content density', () => {
+    // Case 1: Sparse dated (1), many undated (20)
+    const sparseDated = allocateTrackerSpace(400, 'day', 1, 20);
+    expect(sparseDated.undatedHeight).toBeGreaterThan(sparseDated.gridHeight);
+
+    // Case 2: Many dated (20), few undated (1)
+    const denseDated = allocateTrackerSpace(400, 'day', 20, 1);
+    expect(denseDated.gridHeight).toBeGreaterThan(denseDated.undatedHeight);
+
+    // Case 3: Zero undated -> all space to grid
+    const noUndated = allocateTrackerSpace(400, 'day', 5, 0);
+    expect(noUndated.undatedHeight).toBe(0);
+    expect(noUndated.gridHeight).toBe(400);
+
+    // Case 4: Zero dated -> undated gets majority of day space
+    const noDated = allocateTrackerSpace(400, 'day', 0, 10);
+    expect(noDated.undatedHeight).toBeGreaterThan(noDated.gridHeight);
+    expect(noDated.gridHeight).toBeLessThanOrEqual(50);
+  });
+
+  it('never produces negative heights or crashes on extreme inputs (CR-10)', () => {
+    const zeroSpace = allocateTrackerSpace(0, 'day', 10, 10);
+    expect(zeroSpace.gridHeight).toBeGreaterThanOrEqual(0);
+    expect(zeroSpace.undatedHeight).toBeGreaterThanOrEqual(0);
+
+    const negativeSpace = allocateTrackerSpace(-50, 'day', 10, 10);
+    expect(negativeSpace.gridHeight).toBeGreaterThanOrEqual(0);
+    expect(negativeSpace.undatedHeight).toBeGreaterThanOrEqual(0);
+
+    // Week / month scales bound undated height to prevent collapsing the grid
+    const weekSpace = allocateTrackerSpace(500, 'week', 15, 30);
+    expect(weekSpace.undatedHeight).toBeLessThanOrEqual(500 * 0.35);
+    expect(weekSpace.gridHeight).toBeGreaterThan(500 * 0.6);
+  });
+});
+
+describe('PDF character detector and visible placeholder substitution', () => {
+  it('accurately identifies supported Latin and unsupported non-Latin / emoji characters', () => {
+    // Supported Latin
+    expect(isSupportedPdfChar('A')).toBe(true);
+    expect(isSupportedPdfChar('z')).toBe(true);
+    expect(isSupportedPdfChar('é')).toBe(true);
+    expect(isSupportedPdfChar('ü')).toBe(true);
+    expect(isSupportedPdfChar('—')).toBe(true); // em-dash
+    expect(isSupportedPdfChar('‘')).toBe(true); // curly quote
+    expect(hasUnsupportedCharacters('Hello, world! 123')).toBe(false);
+    expect(hasUnsupportedCharacters('Café & Übergrößen')).toBe(false);
+
+    // Unsupported non-Latin
+    expect(isSupportedPdfChar('П')).toBe(false); // Cyrillic
+    expect(isSupportedPdfChar('你')).toBe(false); // Chinese
+    expect(isSupportedPdfChar('Ω')).toBe(false); // Greek
+    expect(hasUnsupportedCharacters('Привет мир')).toBe(true);
+    expect(detectUnsupportedCharacters('Привет мир')).toEqual(['П', 'р', 'и', 'в', 'е', 'т', 'м']);
+
+    // Unsupported emoji
+    expect(isSupportedPdfChar('🚀')).toBe(false);
+    expect(isSupportedPdfChar('🍎')).toBe(false);
+    expect(detectUnsupportedCharacters('Task 🚀 and 🍎')).toEqual(['🚀', '🍎']);
+  });
+
+  it('substitutes a visible placeholder instead of dropping characters silently', () => {
+    expect(sanitizePdfText('Task 🚀 with 🍎')).toBe('Task ? with ?');
+    expect(sanitizePdfText('Plain Latin text')).toBe('Plain Latin text');
+    expect(sanitizePdfText('Привет')).toBe('??????');
+  });
+
+  it('scans entire tracker dataset for unsupported characters', () => {
+    const taskWithEmoji = createTask({ title: 'Grocery 🛒', subtasks: [{ id: 's1', title: 'Apples 🍏', done: false }] });
+    const board = { ...initialState(), tasks: [taskWithEmoji] };
+    const data = trackerData(board, options);
+    const unsupported = detectTrackerUnsupported(data, 'My direction 🌟', 'Quote with 💡');
+    expect(unsupported).toContain('🛒');
+    expect(unsupported).toContain('🍏');
+    expect(unsupported).toContain('🌟');
+    expect(unsupported).toContain('💡');
+  });
+});
+
+describe('tracker PDF generation, omission tracking, and SVG Unicode retention', () => {
+  it('computes omitted tasks and checklist steps when content cannot fit and prints omission notice (200x10)', async () => {
+    const tasks200 = Array.from({ length: 200 }, (_, i) =>
+      createTask({
+        id: `task-${i + 1}`,
+        title: `Task number ${i + 1}`,
+        dueDate: '2026-10-16',
+        subtasks: Array.from({ length: 10 }, (_, s) => ({
+          id: `task-${i + 1}-step-${s + 1}`,
+          title: `Step ${s + 1} for task ${i + 1}`,
+          done: false
+        }))
+      })
+    );
+    const board200 = { ...initialState(), tasks: tasks200 };
+    const dayOptions: TrackerOptions = {
+      anchor: '2026-10-16',
+      scale: 'day',
+      area: 'All',
+      includeUndated: false,
+      includeChecklist: true,
+      paper: 'a4'
+    };
+    const data200 = trackerData(board200, dayOptions);
+    const doc200 = await buildTrackerDocument(data200, dayOptions, 'My Direction', 'My Quote');
+
+    // Never drop silently: compute what fits, and return {omittedTasks, omittedSteps}
+    expect(doc200.omittedTasks).toBeGreaterThan(0);
+    expect(doc200.omittedSteps).toBeGreaterThan(0);
+
+    // Affected panel in PDF/SVG preview prints "+N more tasks not shown"
+    expect(doc200.svg).toContain(`+${doc200.omittedTasks} more tasks not shown`);
+
+    // Warning text formatting
+    const warning = formatOmissionWarning(doc200.omittedTasks, doc200.omittedSteps);
+    expect(warning).toContain(`${doc200.omittedTasks} tasks and ${doc200.omittedSteps} steps didn't fit. Turn off checklists or pick a shorter period.`);
+    expect(formatOmissionWarning(12, 40)).toBe("12 tasks and 40 steps didn't fit. Turn off checklists or pick a shorter period.");
+    expect(formatOmissionWarning(1, 1)).toBe("1 task and 1 step didn't fit. Turn off checklists or pick a shorter period.");
+    expect(formatOmissionWarning(12, 0)).toBe("12 tasks didn't fit. Turn off checklists or pick a shorter period.");
+    expect(formatOmissionWarning(0, 40)).toBe("40 steps didn't fit. Turn off checklists or pick a shorter period.");
+  });
+
+  it('unsupported-character substitution applies ONLY to PDF text while SVG preview keeps original Unicode', async () => {
+    const unicodeTask = createTask({
+      id: 'unicode-1',
+      title: 'Task with emoji 🚀 and non-Latin привет',
+      dueDate: '2026-10-16',
+      subtasks: [{ id: 'us1', title: 'Checklist with 🍏 and мир', done: false }]
+    });
+    const boardUnicode = { ...initialState(), tasks: [unicodeTask] };
+    const dayOptions: TrackerOptions = {
+      anchor: '2026-10-16',
+      scale: 'day',
+      area: 'All',
+      includeUndated: false,
+      includeChecklist: true,
+      paper: 'a4'
+    };
+    const dataUnicode = trackerData(boardUnicode, dayOptions);
+    const docUnicode = await buildTrackerDocument(
+      dataUnicode,
+      dayOptions,
+      'Direction with 🌟 and цель',
+      'Quote with 💡 and идея'
+    );
+
+    // The SVG preview keeps original Unicode (the browser can render it)
+    expect(docUnicode.svg).toContain('Task with emoji 🚀 and non-Latin привет');
+    expect(docUnicode.svg).toContain('Checklist with 🍏 and мир');
+    expect(docUnicode.svg).toContain('Direction with 🌟 and цель');
+    expect(docUnicode.svg).toContain('Quote with 💡 and идея');
+
+    // Make sure SVG preview does not replace them with '?'
+    expect(docUnicode.svg).not.toContain('Task with emoji ? and non-Latin ??????');
+    expect(docUnicode.svg).not.toContain('Checklist with ? and ???');
+
+    // Unsupported character list contains the original unsupported characters
+    expect(docUnicode.unsupportedChars).toContain('🚀');
+    expect(docUnicode.unsupportedChars).toContain('🍏');
+    expect(docUnicode.unsupportedChars).toContain('🌟');
+    expect(docUnicode.unsupportedChars).toContain('💡');
+  });
+});
+
