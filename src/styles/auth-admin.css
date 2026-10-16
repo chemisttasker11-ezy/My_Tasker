@@ -85,5 +85,8 @@
 .auth-shell button:focus-visible,.admin-shell button:focus-visible,.guide-dialog button:focus-visible{outline:3px solid #ff9b21;outline-offset:3px}
 @media(max-width:980px){.auth-shell{grid-template-columns:1fr}.auth-story{padding:28px;gap:20px}.auth-story h1{font-size:42px}.auth-progress-preview{display:none}.auth-story-copy>p{font-size:15px}.auth-form-wrap{padding:34px 20px}.admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.admin-layout{grid-template-columns:1fr}.admin-nav{min-height:0;display:flex;overflow-x:auto;white-space:nowrap;padding:9px}.admin-nav button{flex:none}.admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-header-actions{width:100%}.admin-header-actions .button{flex:1}.admin-table-section{padding:15px}}
-@media(max-width:420px){.auth-story{padding:21px}.auth-story h1{font-size:34px}.auth-brand{font-size:23px}.auth-form-wrap{padding:25px 15px}.auth-quick-guide>div{grid-template-columns:1fr}.admin-stats{grid-template-columns:1fr}.admin-backup-list{grid-template-columns:1fr}.admin-mfa-qr code{font-size:11px}.admin-header-actions{gap:5px}}
+@media(max-width:420px){.auth-story{padding:21px}.auth-story h1{font-size:34px}.auth-brand{font-size:23px}.auth-form-wrap{padding:25px 15px}.auth-quick-guide>div{grid-template-columns:1fr}.admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.admin-stat{padding:14px;min-height:145px;gap:8px}.admin-stat strong{font-size:27px}.admin-stat span{font-size:12px}.admin-backup-list{grid-template-columns:1fr}.admin-mfa-qr code{font-size:11px}.admin-header-actions{gap:5px}}
 @media(prefers-reduced-motion:reduce){.auth-shell *,.admin-shell *,.guide-backdrop *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Narrowest handsets: keep every stat readable without cramped columns. */
+@media(max-width:350px){.admin-stats{grid-template-columns:1fr}.admin-stat{min-height:120px}}

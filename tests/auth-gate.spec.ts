@@ -158,7 +158,11 @@ test.describe('@auth-gate authenticated app acceptance',()=>{
     for(const width of [320,375,390,768,1440]){
       await page.setViewportSize({width,height:850});
       await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+2)).toBe(true);
-      if(width===390)await page.screenshot({path:'test-results/admin-dashboard-mobile.png',fullPage:true});
+      if(width===390){
+        await expect.poll(()=>page.locator('.admin-stats').evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(2);
+        await page.screenshot({path:'test-results/admin-dashboard-mobile.png',fullPage:true});
+      }
+      if(width===320)await expect.poll(()=>page.locator('.admin-stats').evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(' ').length)).toBe(1);
       if(width===1440)await page.screenshot({path:'test-results/admin-dashboard-desktop.png',fullPage:true});
     }
   });
