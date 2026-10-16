@@ -13,11 +13,13 @@ export function changeArea(state: BoardState, previous: string | null, name: str
   return { ...state,
     areas: previous ? state.areas.map(a => a.id === previous ? { ...a, id: next } : a) : [...state.areas, { id: next, emoji: '●', tone: tones[state.areas.length % tones.length] }],
     tasks: previous ? state.tasks.map(t => t.category === previous ? { ...t, category: next } : t) : state.tasks,
-    completions: previous ? state.completions.map(c => c.category === previous ? { ...c, category: next } : c) : state.completions };
+    completions: previous ? state.completions.map(c => c.category === previous ? { ...c, category: next } : c) : state.completions,
+    plannedEntries: previous ? state.plannedEntries.map(e => e.category === previous ? { ...e, category: next } : e) : state.plannedEntries };
 }
 export function removeArea(state: BoardState, name: string, destination: string): BoardState {
   if (name === destination || !state.areas.some(a => a.id === name) || !state.areas.some(a => a.id === destination)) throw new Error('Choose a different existing area for these tasks.');
   return { ...state, areas: state.areas.filter(a => a.id !== name),
     tasks: state.tasks.map(t => t.category === name ? { ...t, category: destination } : t),
-    completions: state.completions.map(c => c.category === name ? { ...c, category: destination } : c) };
+    completions: state.completions.map(c => c.category === name ? { ...c, category: destination } : c),
+    plannedEntries: state.plannedEntries.map(e => e.category === name ? { ...e, category: destination } : e) };
 }

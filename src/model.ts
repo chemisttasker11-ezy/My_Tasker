@@ -45,6 +45,8 @@ export interface Completion {
 /** A commitment is a snapshot: moving or postponing a task never silently removes it from the score. */
 export interface WeeklyCommitment {
   taskId: string;
+  /** Distinguishes multiple independent planned copies of the same board task. */
+  entryId?: string;
   title: string;
   priority: Priority;
   plannedDate: string;
@@ -58,10 +60,31 @@ export interface WeekReview {
 }
 export interface WeeklyPlan {
   weekStart: string;
+  /** Optional capacity budget and the week's meaningful outcome. */
+  capacityHours?: number;
+  intention?: string;
   commitments: WeeklyCommitment[];
   review: WeekReview | null;
 }
+export interface PlannedEntry {
+  id: string;
+  sourceTaskId: string;
+  date: string;
+  order: number;
+  title: string;
+  description: string;
+  category: Category;
+  priority: Priority;
+  scheduledTime: string;
+  estimateMinutes: number;
+  status: TaskStatus;
+  subtasks: Subtask[];
+  createdAt: string;
+  updatedAt: string;
+}
+/** Planned entries are snapshots: source board tasks stay reusable and unchanged. */
 export interface BoardState {
+  plannedEntries: PlannedEntry[];
   areas: Area[];
   quotes?: QuoteSettings;
   version: 1;
@@ -351,7 +374,7 @@ export function createTask(values: Partial<Task> & Pick<Task, 'title'>): Task {
 }
 
 export function initialState(): BoardState {
-  return { version: 1, areas: CATEGORIES.map(a => ({ ...a })), theme: 'light', completions: [], weekPlans: {}, dailyFocus: {}, tasks: seed.map((t, i) => createTask({ ...t, id: `notebook-${i + 1}`, origin: 'notebook' })) };
+  return { version: 1, areas: CATEGORIES.map(a => ({ ...a })), theme: 'light', completions: [], plannedEntries: [], weekPlans: {}, dailyFocus: {}, tasks: seed.map((t, i) => createTask({ ...t, id: `notebook-${i + 1}`, origin: 'notebook' })) };
 }
 
 export const STORAGE_KEY = 'my-command-centre:v1';
@@ -450,11 +473,12 @@ export function validateImported(raw: unknown): BoardState {
         !Array.isArray(plan.commitments) || plan.commitments.length > 150) throw new Error('Invalid weekly plan.');
       const seen = new Set<string>();
       const commitments = plan.commitments.map(item => {
-        if (!item || typeof item.taskId !== 'string' || !item.taskId || item.taskId.length > 100 || seen.has(item.taskId) ||
+        if (!item || typeof item.taskId !== 'string' || !item.taskId || item.taskId.length > 100 || seen.has(item.entryId || item.taskId) ||
           typeof item.title !== 'string' || item.title.length > 250 ||
+          (item.entryId !== undefined && (typeof item.entryId !== 'string' || !item.entryId || item.entryId.length > 100)) ||
           !priority.has(item.priority) || !validISODate(item.plannedDate)) throw new Error('Invalid weekly commitment.');
-        seen.add(item.taskId);
-        return { taskId: item.taskId, title: item.title, priority: item.priority, plannedDate: item.plannedDate };
+        seen.add(item.entryId || item.taskId);
+        return { taskId: item.taskId, entryId: item.entryId, title: item.title, priority: item.priority, plannedDate: item.plannedDate };
       });
       let review: WeekReview | null = null;
       if (plan.review !== null && plan.review !== undefined) {
@@ -464,7 +488,10 @@ export function validateImported(raw: unknown): BoardState {
           typeof r.savedAt !== 'string' || (r.scoreSnapshot !== null && (!Number.isInteger(r.scoreSnapshot) || r.scoreSnapshot < 0 || r.scoreSnapshot > 100))) throw new Error('Invalid weekly review.');
         review = { wins: r.wins, blockers: r.blockers, adjustment: r.adjustment, savedAt: r.savedAt, scoreSnapshot: r.scoreSnapshot };
       }
-      weekPlans[key] = { weekStart: key, commitments, review };
+      const capacityHours = plan.capacityHours;
+      if (capacityHours !== undefined && (!Number.isFinite(capacityHours) || capacityHours < 0 || capacityHours > 168)) throw new Error('Invalid weekly capacity.');
+      if (plan.intention !== undefined && (typeof plan.intention !== 'string' || plan.intention.length > 400)) throw new Error('Invalid weekly intention.');
+      weekPlans[key] = { weekStart: key, commitments, review, capacityHours: capacityHours ?? undefined, intention: plan.intention ?? '' };
     }
   }
   const dailyFocus: Record<string, string[]> = Object.create(null) as Record<string, string[]>;
@@ -477,14 +504,43 @@ export function validateImported(raw: unknown): BoardState {
       dailyFocus[key] = ids;
     }
   }
-  return { version: 1, tasks, completions, weekPlans, dailyFocus, areas, quotes: validateQuoteSettings(obj.quotes), theme: obj.theme === 'dark' ? 'dark' : 'light' };
+  const plannedEntries: PlannedEntry[] = [];
+  if (obj.plannedEntries !== undefined) {
+    if (!Array.isArray(obj.plannedEntries) || obj.plannedEntries.length > 20000) throw new Error('Invalid planned entries in backup.');
+    const entryIds = new Set<string>();
+    for (const e of obj.plannedEntries) {
+      if (!e || typeof e !== 'object' || typeof e.id !== 'string' || !e.id || e.id.length > 100 || entryIds.has(e.id) ||
+        typeof e.sourceTaskId !== 'string' || !e.sourceTaskId || e.sourceTaskId.length > 100 ||
+        !validISODate(e.date) || !e.date || !Number.isInteger(e.order) || e.order < 0 || e.order > 20000 ||
+        typeof e.title !== 'string' || !e.title.trim() || e.title.length > 250 ||
+        typeof e.description !== 'string' || e.description.length > 10000 ||
+        !categories.has(e.category) || !priority.has(e.priority) || !validTime(e.scheduledTime) ||
+        !Number.isInteger(e.estimateMinutes) || e.estimateMinutes < 0 || e.estimateMinutes > 100000 ||
+        !statuses.has(e.status) || !Array.isArray(e.subtasks) || e.subtasks.length > 100 ||
+        typeof e.createdAt !== 'string' || typeof e.updatedAt !== 'string') throw new Error('Invalid planned entry.');
+      const checklistIds = new Set<string>();
+      const subtasks = e.subtasks.map(s => {
+        if (!s || typeof s.id !== 'string' || !s.id || s.id.length > 100 || checklistIds.has(s.id) ||
+          typeof s.title !== 'string' || !s.title.trim() || s.title.length > 250 || typeof s.done !== 'boolean') throw new Error('Invalid planned checklist.');
+        checklistIds.add(s.id);
+        return { id: s.id, title: s.title, done: s.done };
+      });
+      entryIds.add(e.id);
+      plannedEntries.push({ id: e.id, sourceTaskId: e.sourceTaskId, date: e.date, order: e.order,
+        title: e.title, description: e.description, category: e.category, priority: e.priority,
+        scheduledTime: e.scheduledTime, estimateMinutes: e.estimateMinutes, status: e.status,
+        subtasks, createdAt: e.createdAt.slice(0, 60), updatedAt: e.updatedAt.slice(0, 60) });
+    }
+  }
+  return { version: 1, tasks, completions, plannedEntries, weekPlans, dailyFocus, areas,
+    quotes: validateQuoteSettings(obj.quotes), theme: obj.theme === 'dark' ? 'dark' : 'light' };
 }
 
 /** A weekly plan remains explicit, so postponement cannot silently inflate progress. */
 export function setWeekCommitment(state: BoardState, weekStart: string, task: Task, include: boolean): BoardState {
   if (!validISODate(weekStart) || !weekStart || new Date(`${weekStart}T12:00:00Z`).getUTCDay() !== 1) return state;
   const current = state.weekPlans?.[weekStart] ?? { weekStart, commitments: [], review: null };
-  const already = current.commitments.some(c => c.taskId === task.id);
+  const already = current.commitments.some(c => !c.entryId && c.taskId === task.id);
   if (already === include) return state;
   if (include && (task.archivedAt || current.commitments.length >= 150)) return state;
   const commitments = include
@@ -492,7 +548,7 @@ export function setWeekCommitment(state: BoardState, weekStart: string, task: Ta
       taskId: task.id, title: task.title, priority: task.priority,
       plannedDate: task.dueDate >= weekStart && task.dueDate <= addDaysUTC(weekStart, 6) ? task.dueDate : ''
     }]
-    : current.commitments.filter(c => c.taskId !== task.id);
+    : current.commitments.filter(c => c.entryId || c.taskId !== task.id);
   const review = current.review ? { ...current.review, savedAt: '', scoreSnapshot: null } : null;
   return { ...state, weekPlans: { ...state.weekPlans, [weekStart]: { weekStart, commitments, review } } };
 }
@@ -505,7 +561,7 @@ function addDaysUTC(day: string, count: number): string {
 
 /** Pick no more than three deliberate daily priorities; independent of task status. */
 export function toggleDailyFocus(state: BoardState, day: string, taskId: string): BoardState {
-  if (!validISODate(day) || !day || !state.tasks.some(t => t.id === taskId && !t.archivedAt)) return state;
+  if (!validISODate(day) || !day || !state.tasks.some(t => t.id === taskId && !t.archivedAt) && !state.plannedEntries.some(e => e.id === taskId && e.date === day)) return state;
   const current = state.dailyFocus?.[day] ?? [];
   const included = current.includes(taskId);
   if (!included && current.length >= 3) return state;

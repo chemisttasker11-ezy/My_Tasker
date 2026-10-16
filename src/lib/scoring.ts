@@ -38,15 +38,16 @@ function completedOnDate(value: string): string {
   } catch { return ''; }
 }
 
-export function scoreWeek(plan: WeeklyPlan | undefined, state: Pick<BoardState, 'tasks' | 'completions'>, weekStart: string, today: string): WeekScore {
+export function scoreWeek(plan: WeeklyPlan | undefined, state: Pick<BoardState, 'tasks' | 'completions'> & Partial<Pick<BoardState, 'plannedEntries'>>, weekStart: string, today: string): WeekScore {
   const end = addDays(weekStart, 6);
   const currentWeek = mondayOf(today) === weekStart;
   const items: ScoredCommitment[] = (plan?.commitments ?? []).map(commitment => {
     const task = state.tasks.find(item => item.id === commitment.taskId);
+    const entry = commitment.entryId ? state.plannedEntries?.find(item => item.id === commitment.entryId) : undefined;
     const completedInWeek = state.completions.some(c =>
       c.taskId === commitment.taskId && completedOnDate(c.completedAt) >= weekStart && completedOnDate(c.completedAt) <= end);
     // For past and future weeks, never rewrite history using today's live status.
-    const status: TaskStatus = completedInWeek ? 'finished' :
+    const status: TaskStatus = commitment.entryId ? (currentWeek && entry ? entry.status : 'not-started') : completedInWeek ? 'finished' :
       currentWeek && task && !task.archivedAt
         ? (task.status === 'finished' ? 'not-started' : task.status)
         : 'not-started';
