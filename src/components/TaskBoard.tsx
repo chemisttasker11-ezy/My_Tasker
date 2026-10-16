@@ -1,4 +1,4 @@
-import { useState, type HTMLAttributes } from 'react';
+import { useState, useRef, type HTMLAttributes } from 'react';
 import { Archive, ArrowRight, CalendarDays, Check, Clock3, Copy, Flag, GripVertical, MoreHorizontal, Plus, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -15,6 +15,7 @@ interface CardProps {
 }
 export function CardPresentation({ task, done, day, onComplete, onEdit, onDuplicate, onMove, onArchive, onStatus, onSubtask, ghost, dragHandle }: CardProps) {
   const [menu, setMenu] = useState(false);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
   const due = taskDue(task, day, done);
   const tally = task.subtasks.filter(s => s.done).length;
   return (
@@ -23,20 +24,43 @@ export function CardPresentation({ task, done, day, onComplete, onEdit, onDuplic
         <span className={`category-pill tone-${categoryInfo(task.category).tone}`}>
           <span aria-hidden="true">{categoryInfo(task.category).emoji}</span> {task.category}
         </span>
-        <div className="card-actions">
+        <div
+          className="card-actions"
+          onKeyDown={e => {
+            if (e.key === 'Escape' && menu) {
+              e.stopPropagation();
+              setMenu(false);
+              moreButtonRef.current?.focus();
+            }
+          }}
+        >
           {!ghost && (
             <>
-              <button type="button" className="icon-button small subtle" aria-label={`More options for ${task.title}`} aria-expanded={menu} aria-haspopup="true" onClick={() => setMenu(!menu)}><MoreHorizontal size={17} /></button>
+              <button
+                ref={moreButtonRef}
+                type="button"
+                className="icon-button small subtle"
+                aria-label={`More options for ${task.title}`}
+                aria-expanded={menu}
+                aria-haspopup="true"
+                onClick={() => setMenu(!menu)}
+              >
+                <MoreHorizontal size={17} />
+              </button>
               <button type="button" className="drag-handle" aria-label={`Drag ${task.title}`} title="Drag to move task" {...dragHandle}><GripVertical size={18} /></button>
             </>
           )}
-          {menu && !ghost && <div className="card-popover" role="menu" aria-label="Card actions" onKeyDown={e => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); } }}>
-            <button type="button" role="menuitem" onClick={() => { setMenu(false); onEdit(task); }}><SlidersHorizontal size={15}/> Edit task</button>
-            <button type="button" role="menuitem" onClick={() => { setMenu(false); onDuplicate(task); }}><Copy size={15}/> Duplicate & edit</button>
-            <div className="popover-label">Move to lane</div>
-            {LANES.filter(l => l.id !== task.lane).map(l => <button type="button" role="menuitem" key={l.id} title={`Move to ${l.title}`} onClick={() => { setMenu(false); onMove(task.id, l.id); }}><ArrowRight size={14}/> {l.title}</button>)}
-            <button type="button" role="menuitem" className="danger" onClick={() => { setMenu(false); onArchive(task.id); }}><Archive size={15}/> Archive task</button>
-          </div>}
+          {menu && !ghost && (
+            <div className="card-popover" aria-label="Card actions">
+              <button type="button" onClick={() => { setMenu(false); onEdit(task); }}><SlidersHorizontal size={15}/> Edit task</button>
+              <button type="button" onClick={() => { setMenu(false); onDuplicate(task); }}><Copy size={15}/> Duplicate & edit</button>
+              <div className="popover-label">Move to lane</div>
+              {LANES.filter(l => l.id !== task.lane).map(l => (
+                <button type="button" key={l.id} title={`Move to ${l.title}`} onClick={() => { setMenu(false); onMove(task.id, l.id); }}><ArrowRight size={14}/> {l.title}</button>
+              ))}
+              <button type="button" className="danger" onClick={() => { setMenu(false); onArchive(task.id); }}><Archive size={15}/> Archive task</button>
+            </div>
+          )}
         </div>
       </div>
       <div className="task-heading">

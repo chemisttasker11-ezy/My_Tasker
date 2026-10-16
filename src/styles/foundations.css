@@ -72,5 +72,5 @@ h1,h2,h3{text-wrap:balance}
   .page-title-row h1{font-size:clamp(23px,7vw,30px)}
 }
 @media(prefers-reduced-motion:reduce){
- *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;animation-iteration-count:1!important;transform:none!important}
+ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important;animation-iteration-count:1!important}
 }

@@ -107,11 +107,12 @@ test.describe('TaskBoard card keyboard lane move alternative', () => {
 
     const popover = page.locator('.card-popover');
     await expect(popover).toBeVisible();
-    await expect(popover.getByRole('menuitem', { name: 'Weekly' })).toBeVisible();
+    await expect(popover.getByRole('button', { name: 'Weekly' })).toBeVisible();
 
-    // Esc closes menu
+    // Esc closes menu and returns focus to More button
     await page.keyboard.press('Escape');
     await expect(popover).not.toBeVisible();
+    await expect(moreBtn).toBeFocused();
   });
 });
 
@@ -124,15 +125,15 @@ test.describe('Responsive horizontal overflow (DC-6 & all views)', () => {
 
   const views = [
     { id: 'overview', name: 'Overview' },
-    { id: 'today', name: 'Today’s focus' },
+    { id: 'today', name: 'Today' },
     { id: 'board', name: 'My task board' },
     { id: 'week', name: 'Week planner' },
     { id: 'calendar', name: 'Calendar' },
     { id: 'upcoming', name: 'Upcoming' },
     { id: 'goals', name: 'Long-term goals' },
     { id: 'completed', name: 'Completed' },
-    { id: 'quotes', name: 'Quotes & direction' },
-    { id: 'library', name: 'Task library' },
+    { id: 'quotes', name: 'Direction & quotes' },
+    { id: 'library', name: 'Life task library' },
     { id: 'settings', name: 'Settings & backup' },
   ];
 
@@ -156,20 +157,20 @@ test.describe('Responsive horizontal overflow (DC-6 & all views)', () => {
         expect(hasNoOverflow).toBe(true);
       });
     }
-
-    test(`no horizontal overflow in Settings at 736px with suggestion row wrapping`, async ({ page }) => {
-      await page.setViewportSize({ width: 736, height: 800 });
-      await page.getByRole('button', { name: 'Settings & backup' }).click();
-      await page.waitForTimeout(100);
-
-      const hasNoOverflow = await page.evaluate(() => {
-        return document.documentElement.scrollWidth <= window.innerWidth + 2;
-      });
-      expect(hasNoOverflow).toBe(true);
-
-      const suggestionRow = page.locator('.suggestion-row').first();
-      await expect(suggestionRow).toBeVisible();
-      await expect(suggestionRow).toHaveCSS('flex-wrap', 'wrap');
-    });
   }
+
+  test(`no horizontal overflow in Settings at 736px with suggestion row wrapping`, async ({ page }) => {
+    await page.setViewportSize({ width: 736, height: 800 });
+    await page.getByRole('button', { name: 'Settings & backup' }).click();
+    await page.waitForTimeout(100);
+
+    const hasNoOverflow = await page.evaluate(() => {
+      return document.documentElement.scrollWidth <= window.innerWidth + 2;
+    });
+    expect(hasNoOverflow).toBe(true);
+
+    const suggestionRow = page.locator('.suggestion-row').first();
+    await expect(suggestionRow).toBeVisible();
+    await expect(suggestionRow).toHaveCSS('flex-wrap', 'wrap');
+  });
 });

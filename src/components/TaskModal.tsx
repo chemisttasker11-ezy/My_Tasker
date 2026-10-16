@@ -26,6 +26,8 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
   const openerRef = useRef<HTMLElement | null>(null);
   const modalRef = useRef<HTMLElement | null>(null);
   const scrimRef = useRef<HTMLDivElement | null>(null);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
     openerRef.current = (document.activeElement as HTMLElement) ?? null;
@@ -53,7 +55,7 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
     const listener = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onDismiss();
+        onDismissRef.current();
         return;
       }
       if (e.key === 'Tab' && modalRef.current) {
@@ -90,7 +92,7 @@ export function TaskModal({ task, defaultLane, defaultDate = '', defaultTime = '
       }
       openerRef.current?.focus?.();
     };
-  }, [onDismiss]);
+  }, []);
   function addSubtask() {
     if (!newSubtask.trim()) return;
     setSubtasks(old => [...old, { id: generateId(), title: newSubtask.trim(), done: false }]);
