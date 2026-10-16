@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useBoardPersistence } from './hooks/useBoardPersistence';
 import { usePlanningController } from './hooks/usePlanningController';
 import { createTaskController } from './controllers/taskController';
+import { importBoardWithRecovery } from './controllers/backupController';
 import { type Category, type Lane, type Priority, type Task, type View, createTask, brisbaneToday, duplicateTask as cloneTask, initialState, isCompleted, validateImported } from './model';
 import { addEntry } from './lib/planning';
 import type { ParsedQuickAdd } from './lib/quickAdd';
@@ -118,21 +119,7 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   }
   async function importData(file: File | undefined) {
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { alertNotice('Backup file is too large (10 MB limit)'); return; }
-    try {
-      const incoming = validateImported(JSON.parse(await file.text()));
-      if (!window.confirm(`Import ${incoming.tasks.length} tasks, ${incoming.areas.length} areas, ${incoming.completions.length} history entries and ${incoming.plannedEntries.length} planned copies? This replaces the current board and saves a local recovery backup first.`)) return;
-      // An import must never silently destroy the current cloud or local board.
-      // Account scope prevents different signed-in users from sharing backup keys.
-      try {
-        const key = `mytasker:before-import:${account?.id ?? 'local'}:${new Date().toISOString()}`;
-        localStorage.setItem(key, JSON.stringify(board));
-      } catch {
-        alertNotice('A safety backup could not be stored in this browser. Import cancelled; export the current board first.');
-        return;
-      }
-      setBoard(incoming); alertNotice('Backup restored. Your previous plan remains available in this browser as a recovery copy.');
-    } catch (err) { alertNotice(err instanceof Error ? err.message : 'Could not import backup'); }
+    try { await importBoardWithRecovery(file,board,account?.id,setBoard,alertNotice); }
     finally { if (fileInputRef.current) fileInputRef.current.value = ''; }
   }
   function reset() {
