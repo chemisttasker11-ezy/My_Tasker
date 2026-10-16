@@ -1,0 +1,362 @@
+/* Focus Mode (ADHD single-task view) - Batch 2B
+   Follows docs/DESIGN.md: token usage, 44px hit areas, visible focus, reduced motion. */
+
+.focus-view {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--bg);
+  color: var(--ink);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 36px 20px 48px;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
+.focus-container {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin: 0 auto;
+}
+
+/* Header & title */
+.focus-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.focus-gentle-copy {
+  margin: 0;
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.focus-title {
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(28px, 5vw, 38px);
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ink);
+  word-break: break-word;
+  outline: none;
+}
+
+.focus-title:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+/* Notes section */
+.focus-notes {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Checklist section */
+.focus-checklist-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.focus-checklist-heading {
+  margin: 0;
+  font-family: 'Outfit', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.focus-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.focus-checklist-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 16px;
+  min-height: 56px;
+  box-shadow: var(--shadow);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  box-sizing: border-box;
+}
+
+.focus-checklist-item:hover {
+  border-color: var(--purple);
+}
+
+.focus-checklist-item.is-done {
+  opacity: 0.82;
+  background: color-mix(in srgb, var(--paper) 75%, var(--bg));
+}
+
+/* Big tick target: ≥44px hit area */
+.focus-check-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.focus-check-target:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 3px;
+}
+
+.focus-check-target.is-checked {
+  color: var(--positive);
+}
+
+.focus-item-label {
+  flex: 1;
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  color: var(--ink);
+  cursor: pointer;
+  word-break: break-word;
+  user-select: none;
+}
+
+.focus-item-label.is-done {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+
+/* Timer Section (Optional, hidden until Start) */
+.focus-timer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.focus-timer-unstarted {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 14px 20px;
+  gap: 16px;
+  box-shadow: var(--shadow);
+}
+
+.focus-timer-prompt-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.focus-timer-prompt {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.focus-timer-subprompt {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.focus-timer-card {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.focus-timer-display {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.focus-timer-time-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.focus-timer-clock {
+  font-family: 'Outfit', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.focus-timer-estimate-text {
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Progress bar for elapsed vs estimate */
+.focus-progress-track {
+  width: 100%;
+  height: 10px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  position: relative;
+}
+
+.focus-progress-fill {
+  height: 100%;
+  background: var(--purple);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+/* Timer controls: Start / Pause / +5 min */
+.focus-timer-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* General button styles for focus mode (all ≥44px hit targets) */
+.focus-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  touch-action: manipulation;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.focus-btn:focus-visible {
+  outline: 3px solid var(--focus-outline);
+  outline-offset: 3px;
+}
+
+.focus-btn-secondary {
+  background: var(--paper);
+  border-color: var(--border);
+  color: var(--ink);
+}
+
+.focus-btn-secondary:hover {
+  background: var(--bg);
+  border-color: var(--purple);
+}
+
+/* Bottom Actions: Done (primary cobalt) and Not now (exit) */
+.focus-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.focus-btn-primary {
+  background: var(--purple);
+  color: var(--paper);
+  border: 1px solid var(--purple);
+  min-width: 120px;
+}
+
+.focus-btn-primary:hover {
+  filter: brightness(0.92);
+}
+
+.focus-btn-exit {
+  background: var(--paper);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.focus-btn-exit:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .focus-view,
+  .focus-checklist-item,
+  .focus-progress-fill,
+  .focus-btn {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .focus-view {
+    padding: 24px 14px 40px;
+  }
+  .focus-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .focus-actions button {
+    width: 100%;
+  }
+}
