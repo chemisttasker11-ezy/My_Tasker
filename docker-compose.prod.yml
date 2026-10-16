@@ -1,0 +1,70 @@
+name: mytasker_prod
+
+x-log: &bounded-log
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mytasker_db_prod
+    restart: unless-stopped
+    logging: *bounded-log
+    environment:
+      POSTGRES_DB: mytasker
+      POSTGRES_USER: mytasker
+      POSTGRES_PASSWORD: "${MYTASKER_DB_PASSWORD:?Set MYTASKER_DB_PASSWORD in env/mytasker.prod.env}"
+    volumes:
+      - mytasker_pgdata:/var/lib/postgresql/data
+    networks:
+      - private
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U mytasker -d mytasker"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  web:
+    image: mytasker_web_prod:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mytasker_backend_prod
+    restart: unless-stopped
+    logging: *bounded-log
+    env_file:
+      - ./env/mytasker.prod.env
+    environment:
+      DEBUG: "False"
+      ALLOWED_HOSTS: "${MYTASKER_HOST:?MYTASKER_HOST required},mytasker_backend_prod,localhost"
+      CSRF_TRUSTED_ORIGINS: "https://${MYTASKER_HOST:?MYTASKER_HOST required}"
+      DATABASE_URL: "postgres://mytasker:${MYTASKER_DB_PASSWORD:?Database password required}@db:5432/mytasker"
+      TRUST_PROXY_HEADERS: "True"
+      FORCE_HTTPS: "True"
+      FRONTEND_DIST: "/app/dist"
+    depends_on:
+      db:
+        condition: service_healthy
+    expose:
+      - "8000"
+    networks:
+      - private
+      - shared_backend_network
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz/',timeout=5)"]
+      interval: 20s
+      timeout: 8s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  mytasker_pgdata:
+
+networks:
+  private:
+    driver: bridge
+    internal: true
+  shared_backend_network:
+    external: true
