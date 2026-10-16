@@ -121,6 +121,8 @@ export function CalendarView({ tasks, completions, today, onEdit, onDuplicate, o
           align-items: center;
           margin: 0;
           gap: 6px;
+          flex-wrap: nowrap;
+          min-width: 0;
           flex-shrink: 1;
         }
         .compact-calendar-toolbar .calendar-filter {

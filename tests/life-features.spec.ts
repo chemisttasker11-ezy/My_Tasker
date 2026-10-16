@@ -162,9 +162,9 @@ test('calendar controls collapse into compact toolbar on >=768px (DC-8)', async 
     await expect(toolbar.getByRole('group', { name: 'Calendar view' })).toBeVisible();
     await expect(toolbar.getByRole('textbox', { name: 'Search calendar tasks' })).toBeVisible();
 
-    // All toolbar controls share one row (same offsetTop within 4px)
+    // All toolbar controls share one row (vertical centres within 4px)
     const offsets = await toolbar.locator('.calendar-toolbar-row > *').evaluateAll(elements =>
-      elements.map(el => (el as HTMLElement).offsetTop)
+      elements.map(el => { const r = (el as HTMLElement).getBoundingClientRect(); return r.top + r.height / 2; })
     );
     expect(offsets.length).toBe(4);
     const minTop = Math.min(...offsets);
@@ -172,7 +172,7 @@ test('calendar controls collapse into compact toolbar on >=768px (DC-8)', async 
     expect(maxTop - minTop).toBeLessThanOrEqual(4);
 
     const controlOffsets = await toolbar.locator('.calendar-navigation, .calendar-scale-switch, .calendar-filter, .calendar-filter-select, .calendar-tracker-btn').evaluateAll(elements =>
-      elements.map(el => (el as HTMLElement).offsetTop)
+      elements.map(el => { const r = (el as HTMLElement).getBoundingClientRect(); return r.top + r.height / 2; })
     );
     const minCtrlTop = Math.min(...controlOffsets);
     const maxCtrlTop = Math.max(...controlOffsets);
