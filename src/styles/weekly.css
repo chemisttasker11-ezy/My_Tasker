@@ -30,30 +30,83 @@
   box-shadow: 0 4px 16px rgba(22, 72, 223, 0.12);
 }
 
-.week-day-head { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px; }
-.week-day-head > span { font-size: 12px; font-weight: 700; color: var(--subtle); text-transform: uppercase; }
-.week-day-head > strong { grid-row: 2; font-size: 22px; color: var(--ink); line-height: 1.1; }
-.week-day-head > button {
-  grid-row: 1/3;
-  grid-column: 2;
-  display: grid;
-  place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm, 8px);
-  border: 1px solid var(--border);
-  color: var(--purple);
-  background: var(--paper);
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+.week-day-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 2px 2px 0;
 }
-.week-day-head > button:hover {
+.week-day-head > span,
+.week-day-head .week-day-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.week-day-head > strong,
+.week-day-head .week-day-num {
+  font-family: var(--font-display, Outfit, sans-serif);
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1;
+}
+.week-day-head > button,
+.week-day-head .week-day-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: var(--radius-sm, 8px);
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.week-day-head > button::before,
+.week-day-head .week-day-add-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.week-day-head > button:hover,
+.week-day-head .week-day-add-btn:hover {
   background: var(--soft-purple);
-  border-color: var(--purple);
+  color: var(--purple);
+}
+.week-day-head > button:focus-visible,
+.week-day-head .week-day-add-btn:focus-visible {
+  outline: 2px solid var(--purple);
+  outline-offset: 1px;
 }
 
-.week-day-focus { display: flex; align-items: center; gap: 5px; color: var(--subtle); font-size: 11px; font-weight: 700; }
-.week-day-focus svg { color: var(--purple); }
+.week-day-focus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.week-day-focus svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
 
 /* DayPlan compact styling inside week grid */
 .week-day-column .day-plan-container {
@@ -63,13 +116,14 @@
   min-height: 100px;
 }
 .week-day-column .planned-entry-card {
-  padding: 10px;
-  gap: 6px;
+  padding: 8px 10px;
+  gap: 5px;
   font-size: 13px;
+  border-radius: var(--radius-md, 12px);
 }
 .week-day-column .planned-entry-title {
   font-size: 13px;
-  min-height: 36px;
+  min-height: unset;
 }
 
 /* Scheduled tasks below day plan */
@@ -568,12 +622,10 @@
 .week-day-column .day-plan-container { padding: 0; min-width: 0; }
 .week-day-column .day-plan-empty { padding: 12px 3px; }
 .week-day-column .day-plan-empty p { overflow-wrap: anywhere; font-size: 12px; }
-.week-day-head { grid-template-columns: minmax(0, 1fr); }
-.week-day-head > strong { grid-row: auto; }
-.week-day-head > button { grid-row: auto; grid-column: auto; width: 44px; height: 44px; }
-.week-day-focus { flex-wrap: wrap; font-size: 12px; }
-.week-day-column .planned-entry-card { padding: 4px; min-width: 0; }
-.week-day-column .planned-entry-title { min-height: 44px; overflow-wrap: anywhere; white-space: normal; }
+.week-day-head { display: flex; align-items: center; gap: 6px; }
+.week-day-focus { flex-wrap: wrap; font-size: 11px; }
+.week-day-column .planned-entry-card { padding: 8px 10px; min-width: 0; }
+.week-day-column .planned-entry-title { min-height: unset; overflow-wrap: anywhere; }
 .week-task-controls { flex-wrap: wrap; }
 .week-task-controls button { min-height: 44px; min-width: 44px; }
 .week-scheduled-heading, .week-task-title small, .week-task-title strong, .week-commit-toggle { font-size: 12px; overflow-wrap: anywhere; }

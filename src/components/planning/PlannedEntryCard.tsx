@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import { useModalFocus } from './useModalFocus';
-import { useState, type HTMLAttributes } from 'react';
+import { useState, type HTMLAttributes, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -68,25 +68,59 @@ export function PlannedEntryCard({
   const category = sourceTask?.category;
   const catDetails = category ? categoryInfo(category) : null;
 
-  if (compact) return (
-    <article className={`task-card planned-entry-card compact-entry ${className} ${isDragging ? "is-dragging" : ""} ${isDone ? 'is-done' : ''}`} data-testid={`planned-entry-${entry.id}`}>
-      <button type="button" className="planned-entry-title" onClick={() => onOpenEdit?.(entry)}>{entry.title}</button>
-      {(entry.startTime || entry.durationMin) && <span className="compact-entry-time">{[entry.startTime, entry.durationMin ? `${entry.durationMin}m` : ''].filter(Boolean).join(' / ')}</span>}
-      <span className={`compact-status status-${entry.status}`} title={`Status: ${entry.status.replace(/-/g, " ")}`} aria-label={`Status: ${entry.status}`}><span aria-hidden="true" /><span className="sr-only">{entry.status.replace(/-/g, ' ')}</span></span>
-      {totalCount > 0 && <button className="compact-checklist-toggle" type="button" aria-label={`${doneCount} of ${totalCount} checklist steps completed. Click to ${showChecklist ? 'hide' : 'show'} steps`} aria-expanded={showChecklist} onClick={() => setShowChecklist(v => !v)}>{doneCount}/{totalCount}</button>}
-      {showChecklist && <ul className="planned-entry-checklist-items">{entry.checklist.map(item => <li key={item.id} className="planned-entry-checklist-row"><label><input type="checkbox" aria-label={item.title} checked={item.done} onChange={() => onToggleChecklistItem?.(entry.id, item.id)} /><span>{item.title}</span></label></li>)}</ul>}
-      <div className="compact-entry-controls">
-        {dragHandleProps && <button type="button" className="drag-handle" aria-label={`Drag ${entry.title} to reorder`} {...dragHandleProps}><GripVertical size={18} /></button>}
-        <button type="button" className="compact-actions-trigger" aria-label={`Actions for ${entry.title}`} aria-haspopup="dialog" aria-expanded={showActions} onClick={() => setShowActions(true)}><MoreHorizontal size={20} /></button>
-      </div>
-      {showActions && createPortal(<EntryActionsDialog title={entry.title} onClose={() => setShowActions(false)}>
-        <PlannedEntryCard entry={entry} sourceTask={sourceTask} onStatusChange={onStatusChange} onToggleChecklistItem={onToggleChecklistItem}
-          onOpenEdit={() => { setShowActions(false); onOpenEdit?.(entry); }} onRemove={() => { setShowActions(false); onRemove?.(entry.id); }}
-          onMoveToDay={(id, date) => { setShowActions(false); onMoveToDay?.(id, date); }} onMoveUp={onMoveUp} onMoveDown={onMoveDown}
-          onRefreshFromSource={onRefreshFromSource} canMoveUp={canMoveUp} canMoveDown={canMoveDown} />
-      </EntryActionsDialog>, document.body)}
-    </article>
-  );
+  if (compact) {
+    const metaPieces: ReactNode[] = [];
+    if (entry.startTime) {
+      metaPieces.push(<span key="time" className="compact-entry-time">{entry.startTime}</span>);
+    }
+    if (entry.durationMin) {
+      metaPieces.push(<span key="duration" className="compact-entry-duration">{entry.durationMin}m</span>);
+    }
+    if (totalCount > 0) {
+      metaPieces.push(
+        <button
+          key="checklist"
+          className="compact-checklist-toggle"
+          type="button"
+          aria-label={`${doneCount} of ${totalCount} checklist steps completed. Click to ${showChecklist ? 'hide' : 'show'} steps`}
+          aria-expanded={showChecklist}
+          onClick={() => setShowChecklist(v => !v)}
+        >
+          ✓{doneCount}/{totalCount}
+        </button>
+      );
+    }
+
+    return (
+      <article className={`task-card planned-entry-card compact-entry ${className} ${isDragging ? "is-dragging" : ""} ${isDone ? 'is-done' : ''}`} data-testid={`planned-entry-${entry.id}`}>
+        <button type="button" className="planned-entry-title" onClick={() => onOpenEdit?.(entry)}>{entry.title}</button>
+        <div className="compact-entry-meta">
+          <span className={`compact-status status-${entry.status}`} title={`Status: ${entry.status.replace(/-/g, " ")}`} aria-label={`Status: ${entry.status}`}>
+            <span aria-hidden="true" />
+            <span className="sr-only">{entry.status.replace(/-/g, ' ')}</span>
+          </span>
+          {metaPieces.reduce<ReactNode[]>((acc, item, idx) => {
+            if (idx > 0) {
+              acc.push(<span key={`sep-${idx}`} className="compact-meta-sep" aria-hidden="true">·</span>);
+            }
+            acc.push(item);
+            return acc;
+          }, [])}
+        </div>
+        {showChecklist && <ul className="planned-entry-checklist-items">{entry.checklist.map(item => <li key={item.id} className="planned-entry-checklist-row"><label><input type="checkbox" aria-label={item.title} checked={item.done} onChange={() => onToggleChecklistItem?.(entry.id, item.id)} /><span>{item.title}</span></label></li>)}</ul>}
+        <div className="compact-entry-controls">
+          {dragHandleProps && <button type="button" className="drag-handle" aria-label={`Drag ${entry.title} to reorder`} title="Drag to reorder" {...dragHandleProps}><GripVertical size={16} /></button>}
+          <button type="button" className="compact-actions-trigger" aria-label={`Actions for ${entry.title}`} title="Actions" aria-haspopup="dialog" aria-expanded={showActions} onClick={() => setShowActions(true)}><MoreHorizontal size={18} /></button>
+        </div>
+        {showActions && createPortal(<EntryActionsDialog title={entry.title} onClose={() => setShowActions(false)}>
+          <PlannedEntryCard entry={entry} sourceTask={sourceTask} onStatusChange={onStatusChange} onToggleChecklistItem={onToggleChecklistItem}
+            onOpenEdit={() => { setShowActions(false); onOpenEdit?.(entry); }} onRemove={() => { setShowActions(false); onRemove?.(entry.id); }}
+            onMoveToDay={(id, date) => { setShowActions(false); onMoveToDay?.(id, date); }} onMoveUp={onMoveUp} onMoveDown={onMoveDown}
+            onRefreshFromSource={onRefreshFromSource} canMoveUp={canMoveUp} canMoveDown={canMoveDown} />
+        </EntryActionsDialog>, document.body)}
+      </article>
+    );
+  }
 
   return (
     <article

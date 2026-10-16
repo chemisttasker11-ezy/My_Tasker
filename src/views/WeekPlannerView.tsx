@@ -697,22 +697,25 @@ export function WeekPlannerView({
         data-testid={`week-day-column-${date}`}
       >
         <div className="week-day-head">
-          <span>{DAYS[index].slice(0, 3)}</span>
-          <strong>{Number(date.slice(-2))}</strong>
+          <span className="week-day-name">{DAYS[index].slice(0, 3)}</span>
+          <strong className="week-day-num">{Number(date.slice(-2))}</strong>
           <button
             type="button"
+            className="week-day-add-btn"
             aria-label={`Add task on ${formatDate(date)}`}
             title="Add task"
             onClick={() => onEdit(null, 'daily', date)}
           >
-            <Plus size={17} />
+            <Plus size={15} />
           </button>
         </div>
 
-        <div className="week-day-focus">
-          <Target size={14} />
-          <span>{focusIds.length}/3 focused</span>
-        </div>
+        {focusIds.length > 0 && (
+          <div className="week-day-focus">
+            <Target size={12} />
+            <span>{focusIds.length}/3 focused</span>
+          </div>
+        )}
 
         <DayPlan
           date={date}
