@@ -95,3 +95,6 @@ if not DEBUG and not ADMIN_TOTP_ENCRYPTION_KEY:
     raise ImproperlyConfigured("Production admin login requires ADMIN_TOTP_ENCRYPTION_KEY.")
 
 TRUSTED_PROXY_CIDRS = [value.strip() for value in os.getenv("TRUSTED_PROXY_CIDRS", "").split(",") if value.strip()]
+
+# Isolated container health probe, not a user-authenticated route.
+SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]

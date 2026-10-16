@@ -159,6 +159,12 @@ def checked_code(user, raw, purpose):
 
 @never_cache
 @require_GET
+def healthz(request):
+    return JsonResponse({"status": "ok"})
+
+
+@never_cache
+@require_GET
 def config(request):
     return JsonResponse({"captcha_site_key": settings.RECAPTCHA_SITE_KEY})
 

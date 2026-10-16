@@ -11,3 +11,13 @@ test-results/
 .DS_Store
 *.local
 *-backup.json
+
+# Dedicated deployment secrets and local databases.
+env/
+.env
+.env.*
+!.env.example
+server/db.sqlite3
+server/staticfiles/
+**/__pycache__/
+**/*.pyc

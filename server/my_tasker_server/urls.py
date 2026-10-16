@@ -2,6 +2,7 @@ from django.urls import path
 from accounts import views, admin_api
 
 urlpatterns = [
+    path("healthz/", views.healthz),
     path("api/config/", views.config),
     path("api/admin/status/", admin_api.status),
     path("api/admin/enroll/", admin_api.enroll),
