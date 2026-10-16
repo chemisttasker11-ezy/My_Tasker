@@ -74,7 +74,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - name: Exercise the real authenticated entry point with mocked transport
-        run: npm run test:e2e -- tests/auth-gate.spec.ts
+        run: npm run test:e2e -- tests/auth-gate.spec.ts tests/draft-recovery.spec.ts
         env:
           VITE_DEMO_MODE: '0'
       - uses: actions/upload-artifact@v4

@@ -16,7 +16,7 @@ export function DraftRecoveryDialog({ drafts, serverRevision, onRestore, onDownl
 
   function keepFocus(event: KeyboardEvent<HTMLElement>) {
     if (event.key !== 'Tab' || !dialog.current) return;
-    const buttons = Array.from(dialog.current.querySelectorAll('button:not(:disabled)'));
+    const buttons = Array.from(dialog.current.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
     if (!buttons.length) return;
     const first = buttons[0], last = buttons.at(-1);
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
