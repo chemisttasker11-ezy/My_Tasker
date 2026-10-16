@@ -76,7 +76,7 @@ test('postponed tasks return to Today on their due date', async ({ page }) => {
   board.tasks = [createTask({ title: 'Ready again', status: 'postponed', dueDate: today })];
   await page.evaluate(({ key, board }) => localStorage.setItem(key, JSON.stringify(board)), { key: STORAGE_KEY, board }); await page.reload();
   await page.getByRole('navigation').getByRole('button', { name: /^Today/ }).click();
-  await expect(page.getByRole('main').getByText('Ready again', { exact: true })).toBeVisible();
+  await expect(page.getByRole('main').getByRole('button', { name: /^Ready again .*·/ })).toBeVisible();
 });
 
 test('a failed lazy tracker load offers saved data and reload', async ({ page }) => {
