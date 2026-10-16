@@ -24,11 +24,11 @@ import type { TrackerLaunch } from './views/TrackerView';
 import { AreasContext } from './lib/areas';
 import { addLifeTemplates } from './lib/lifeLibrary';
 import { dailyQuote, quoteSettings } from './lib/quotes';
-import { relevantTasksForDate } from './lib/planProjection';
+import { projectSchedule, taskForPlanned, relevantTasksForDate } from './lib/planProjection';
 import { Library, Quote, Printer, LogOut, CircleHelp, ShieldCheck } from 'lucide-react';
 import { WelcomeGuide } from './components/WelcomeGuide';
 import { sampleBoard } from './lib/sampleBoard';
-import { saveBoard as saveCloudBoard, type CloudSnapshot, type SignedInUser } from './lib/authApi';
+import { saveBoard as saveCloudBoard, loadBoard as loadCloudBoard, type CloudSnapshot, type SignedInUser } from './lib/authApi';
 const TrackerView = lazy(() => import('./views/TrackerView').then(module => ({ default: module.TrackerView })));
 
 const ICONS = { overview: LayoutDashboard, board: ListTodo, today: Sun, week: BarChart3, calendar: CalendarRange, upcoming: CalendarDays, goals: Target, completed: CheckCircle2, archived: Archive, settings: Settings2, library: Library, quotes: Quote, tracker: Printer };
@@ -71,15 +71,24 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
   const day = brisbaneToday();
   const [trackerLaunch, setTrackerLaunch] = useState<TrackerLaunch>({ anchor: day, scale: 'day' });
   const active = useMemo(() => board.tasks.filter(activeItem), [board.tasks]);
-  const completed = (task: Task) => isCompleted(task, board.completions, day);
+  const completed = (task: Task) => {
+    const entry = board.plannedEntries.find(e => e.id === task.id);
+    return entry ? entry.status === 'finished' : isCompleted(task, board.completions, day);
+  };
   const visible = useMemo(() => active.filter(t =>
     (categoryFilter === 'All' || t.category === categoryFilter) &&
     (priorityFilter === 'All' || t.priority === priorityFilter) &&
     (!search.trim() || `${t.title} ${t.description} ${t.category}`.toLocaleLowerCase().includes(search.toLocaleLowerCase().trim()))
   ), [active, categoryFilter, priorityFilter, search]);
-  const outstanding = active.filter(t => !completed(t));
-  const todayTasks = outstanding.filter(t => t.status !== 'postponed' && (t.lane === 'daily' || t.lane === 'urgent' || (t.dueDate && t.dueDate <= day)));
-  const doneToday = board.completions.filter(c => brisbaneToday(new Date(c.completedAt)) === day).length;
+  const todaySchedule = useMemo(() => projectSchedule(board, day, day), [board, day]);
+  const todayCopies = todaySchedule.planned.map(entry => taskForPlanned(entry, board.tasks.find(t => t.id === entry.sourceTaskId)));
+  const scheduledSourceIds = new Set(todaySchedule.planned.map(entry => entry.sourceTaskId));
+  const outstanding = active.filter(t => !completed(t) && !scheduledSourceIds.has(t.id));
+  const todayLegacy = outstanding.filter(t => t.status !== 'postponed' &&
+    (t.lane === 'daily' || t.lane === 'urgent' || (t.dueDate && t.dueDate <= day)));
+  const todayTasks = [...todayCopies.filter(t => t.status !== 'postponed'), ...todayLegacy];
+  const dayDoneHistory = board.completions.filter(c => brisbaneToday(new Date(c.completedAt)) === day).length;
+  const doneToday = dayDoneHistory + board.plannedEntries.filter(entry => entry.date === day && entry.status === 'finished').length;
   const goals = active.filter(t => t.lane === 'goals');
   const currentWeekStart = mondayOf(day);
   const currentWeekScore = useMemo(() => scoreWeek(board.weekPlans?.[currentWeekStart], board, currentWeekStart, day), [board, currentWeekStart, day]);
@@ -202,8 +211,15 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
     alertNotice('Archived task deleted');
   }
   function toggleTask(id: string) {
-    setBoard(s => toggleCompletion(s, id));
+    setBoard(s => {
+      const planned = s.plannedEntries.find(e => e.id === id);
+      return planned ? editEntry(s, id, { status: planned.status === 'finished' ? 'not-started' : 'finished' }) : toggleCompletion(s, id);
+    });
     alertNotice('Progress updated');
+  }
+  function openDailyTask(task: Task) {
+    if (board.plannedEntries.some(entry => entry.id === task.id)) navigate('today');
+    else showEditor(task);
   }
   function toggleSubtask(taskId: string, subtaskId: string) {
     setBoard(s => ({ ...s, tasks: s.tasks.map(t => t.id !== taskId ? t : { ...t, updatedAt: new Date().toISOString(), subtasks: t.subtasks.map(st => st.id === subtaskId ? { ...st, done: !st.done } : st) }) }));
@@ -288,9 +304,9 @@ export default function App({ account, initialCloud, onSignOut, onAdminReturn }:
         {view === 'library' && <LibraryView tasks={board.tasks} onAdd={addTemplates}/>}
         {view === 'quotes' && <QuotesView value={board.quotes} today={day} board={board} onChange={quotes => setBoard(current => ({ ...current, quotes }))}/>}
         {view === 'tracker' && <Suspense fallback={<p role="status">Loading your tracker…</p>}><TrackerView board={board} launch={trackerLaunch}/></Suspense>}
-        {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={showEditor} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore}/>}
+        {view === 'overview' && <OverviewView active={active} todayTasks={todayTasks} doneToday={doneToday} goals={goals} navigate={navigate} showEditor={openDailyTask} completed={completed} toggleTask={toggleTask} setSelectedLane={setSelectedLane} weekScore={currentWeekScore}/>}
         {view === 'board' && <BoardView visible={visible} search={search} setSearch={setSearch} categoryFilter={categoryFilter} setCategoryFilter={setCategoryFilter} priorityFilter={priorityFilter} setPriorityFilter={setPriorityFilter} selectedLane={selectedLane} setSelectedLane={setSelectedLane} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask} moveTask={moveTask} archiveTask={archiveTask} duplicateTask={duplicateTask} changeStatus={changeStatus} toggleSubtask={toggleSubtask}/>}
-        {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={showEditor} toggleTask={toggleTask} allTasks={board.tasks} completed={completed} focusIds={board.dailyFocus?.[day] ?? []} onFocus={chooseDailyFocus}/>}
+        {view === 'today' && <TodayView board={board} planActions={planActions} day={day} todayTasks={todayTasks} doneToday={doneToday} navigate={navigate} showEditor={openDailyTask} toggleTask={toggleTask} allTasks={[...board.tasks, ...todayCopies]} completed={completed} focusIds={board.dailyFocus?.[day] ?? []} onFocus={chooseDailyFocus}/>}
         {view === 'week' && <WeekPlannerView board={board} planActions={planActions} onCapacity={(date,hours,intention)=>setBoard(s=>setWeekCapacity(s,date,hours,intention))} today={day} navigate={navigate} onEdit={showEditor} onInclude={includeInWeek} onFocus={chooseDailyFocus} onReview={saveReview}/>}
         {view === 'calendar' && <CalendarView board={board} planActions={planActions} tasks={board.tasks} completions={board.completions} today={day} onEdit={showEditor} onDuplicate={duplicateTask} onStatus={changeStatus} onReschedule={rescheduleCalendarTask} onTracker={launch => { setTrackerLaunch(launch); navigate('tracker'); }}/>}
         {view === 'upcoming' && <UpcomingView active={active} day={day} completed={completed} showEditor={showEditor} toggleTask={toggleTask}/>}
