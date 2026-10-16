@@ -3,7 +3,9 @@ import type { TrackerLaunch } from './TrackerView';
 import { useMemo, useState, type DragEvent } from 'react';
 import { PlanWorkspace, type PlanningActions } from '../components/PlanWorkspace';
 import type { BoardState } from '../model';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Search, X } from 'lucide-react';
+import { CalendarDays, Plus, Search, X } from 'lucide-react';
+import { CalendarHeader } from '../components/calendar/CalendarHeader';
+import { CalendarPlannerDialogs } from '../components/calendar/CalendarPlannerDialogs';
 import { type Category, type Completion, type Lane, type Task, type TaskStatus } from '../model';
 import { addDays, dateTitle, dateUTC, monthDates, shiftCalendar, visibleRange, type CalendarScale, type CalendarOccurrence } from '../lib/calendar';
 import { formatDate } from '../lib/display';
@@ -11,9 +13,6 @@ import { CalendarEntry } from '../components/CalendarEntry';
 import { STATUS_LABEL, STATUS_ORDER, visibleStatus } from '../lib/progress';
 import { projectSchedule } from '../lib/planProjection';
 
-const SCALES: { id: CalendarScale; label: string }[] = [
-  { id: 'day', label: 'Day' }, { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }, { id: 'year', label: 'Year' }
-];
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const HOURS = Array.from({ length: 17 }, (_, i) => i + 6);
 
@@ -75,34 +74,16 @@ export function CalendarView({ board, planActions, tasks, today, onEdit, onDupli
   const otherHours = withTime.filter(item => { const h = Number(item.task.scheduledTime.slice(0, 2)); return h < 6 || h > 22; });
 
   return <>
-    {selectionOpen && <div className="plan-day-dialog-backdrop" onMouseDown={e=>{ if(e.target===e.currentTarget)setSelectionOpen(false); }}>
-      <section className="plan-day-dialog" role="dialog" aria-modal="true" aria-label="Copy and paste multiple calendar days">
-        <header className="plan-day-dialog-head"><div><h2>Copy & paste calendar days</h2><p>Select up to 31 dates and copy their plan. You can paste to one date, selected dates, or a new starting week.</p></div><button type="button" className="button button-primary" onClick={()=>setSelectionOpen(false)}>Close</button></header>
-        <div className="calendar-selection-add"><label>Add a date <input type="date" value={extraDate} onChange={e=>setExtraDate(e.target.value)}/></label><button type="button" className="button button-secondary" disabled={!extraDate || selectedDates.includes(extraDate) || selectedDates.length>=31} onClick={()=>setSelectedDates(s=>[...s,extraDate].sort())}>Include date</button></div>
-        <div className="calendar-date-selection">{selectedDates.map(date=><button className="button button-secondary" type="button" key={date} aria-label={`Remove selected day ${date}`} onClick={()=>setSelectedDates(s=>s.filter(d=>d!==date))}>{date} ×</button>)}</div>
-        <PlanWorkspace key={selectedDates.join(',')} board={board} dates={selectedDates.length?selectedDates:[anchor]} actions={planActions} title="Copy or arrange selected days"/>
-      </section>
-    </div>}
-    {planningDay && <div className="plan-day-dialog-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setPlanningDay(null);}}>
-      <section className="plan-day-dialog" role="dialog" aria-modal="true" aria-label={`Plan ${formatDate(planningDay)}`}>
-        <header className="plan-day-dialog-head"><h2>Plan {formatDate(planningDay)}</h2><button type="button" className="button button-primary" onClick={()=>setPlanningDay(null)}>Close planner</button></header>
-        <PlanWorkspace board={board} dates={[planningDay]} actions={planActions} title="Arrange this day" compact/>
-      </section>
-    </div>}
-    <div className="page-title-row calendar-page-title"><div><span className="eyebrow">MAKE TIME FOR WHAT MATTERS</span><h1>Calendar <span className="heading-sparkle">✳</span></h1><p>Tap a day to open its planner, add board tasks, rearrange independent copies and copy/paste plans.</p></div><button className="button button-primary" onClick={() => openDay(anchor)}><Plus size={17}/> Plan {formatDate(anchor)}</button></div>
-    <section className="calendar-toolbar panel" aria-label="Calendar controls">
-      <button type="button" className="button button-secondary" onClick={()=>{setSelectedDates([anchor]);setExtraDate(anchor);setSelectionOpen(true);}}>Copy / paste days</button>
-      <button className="button button-primary" onClick={() => onTracker({ anchor, scale, area: category })}>One-page view & PDF</button>
-      <div className="calendar-navigation">
-        <button className="icon-button" aria-label="Previous period" onClick={() => setAnchor(value => shiftCalendar(value, scale, -1))}><ChevronLeft size={20}/></button>
-        <button className="button button-secondary calendar-today-button" onClick={() => setAnchor(today)}>Today</button>
-        <button className="icon-button" aria-label="Next period" onClick={() => setAnchor(value => shiftCalendar(value, scale, 1))}><ChevronRight size={20}/></button>
-        <h2>{dateTitle(anchor, scale)}</h2>
-      </div>
-      <div className="calendar-scale-switch" role="group" aria-label="Calendar view">
-        {SCALES.map(item => <button key={item.id} type="button" aria-pressed={scale === item.id} className={scale === item.id ? 'selected' : ''} onClick={() => setScale(item.id)}>{item.label}</button>)}
-      </div>
-    </section>
+    <CalendarPlannerDialogs board={board} planActions={planActions} selectionOpen={selectionOpen}
+      selectedDates={selectedDates} extraDate={extraDate} anchor={anchor} planningDay={planningDay}
+      onCloseSelection={()=>setSelectionOpen(false)} onCloseDay={()=>setPlanningDay(null)}
+      onSetExtraDate={setExtraDate} onIncludeDate={date=>setSelectedDates(s=>[...s,date].sort())}
+      onRemoveDate={date=>setSelectedDates(s=>s.filter(d=>d!==date))}/>
+    <CalendarHeader anchor={anchor} scale={scale} today={today} onOpenDay={openDay}
+      onOpenTracker={()=>onTracker({anchor,scale,area:category})}
+      onCopyDays={()=>{setSelectedDates([anchor]);setExtraDate(anchor);setSelectionOpen(true);}}
+      onShift={direction=>setAnchor(value=>shiftCalendar(value,scale,direction))}
+      onToday={()=>setAnchor(today)} onScale={setScale}/>
     <div className="calendar-filter-row">
       <label className="calendar-filter"><Search size={16}/><input aria-label="Search calendar tasks" placeholder="Find a scheduled task" value={search} onChange={e => setSearch(e.target.value)}/>{search && <button aria-label="Clear calendar search" onClick={() => setSearch('')}><X size={15}/></button>}</label>
       <label className="calendar-filter-select">Area <select aria-label="Calendar category" value={category} onChange={e => setCategory(e.target.value as Category | 'All')}><option value="All">All areas</option>{areas.map(c => <option key={c.id} value={c.id}>{c.id}</option>)}</select></label>
