@@ -30,7 +30,7 @@ interface Props {
 }
 
 /** Task data lives in the domain model. The calendar only renders occurrences. */
-export function CalendarView({ board, planActions, tasks, completions, today, onEdit, onDuplicate, onStatus, onReschedule, onTracker }: Props) {
+export function CalendarView({ board, planActions, tasks, today, onEdit, onDuplicate, onStatus, onReschedule, onTracker }: Props) {
   const areas = useAreas();
   const [scale, setScale] = useState<CalendarScale>('month');
   const [planningDay, setPlanningDay] = useState<string | null>(null);
