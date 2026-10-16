@@ -38,8 +38,12 @@ describe('periods and recurring completion', () => {
   it('validates backups, never executing arbitrary text', () => {
     const s = initialState();
     expect(validateImported(JSON.parse(JSON.stringify(s))).tasks.length).toBeGreaterThan(20);
+    // An unknown but valid area name is restored (see validation.ts), not rejected.
+    const missingArea = initialState();
+    missingArea.tasks[0].category = 'Bad' as never;
+    expect(validateImported(missingArea).areas.some(a => a.id === 'Bad')).toBe(true);
     const bad = initialState();
-    bad.tasks[0].category = 'Bad' as never;
+    bad.tasks[0].category = 'x'.repeat(41) as never;
     expect(() => validateImported(bad)).toThrow();
   });
   it('permits independent tasks in all six lanes', () => {

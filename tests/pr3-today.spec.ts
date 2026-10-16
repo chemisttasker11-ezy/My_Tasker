@@ -4,7 +4,7 @@ test.beforeEach(async ({page})=>{
   await page.goto('/');
   await page.evaluate(()=>localStorage.clear());
   await page.reload();
-  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:/^Today\\b/}).click();
+  await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:/^Today\b/}).click();
 });
 
 test('PR3 Today provides Now/timeline and a one-field quick capture',async({page})=>{
