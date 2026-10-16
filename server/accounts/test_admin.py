@@ -20,7 +20,9 @@ class AdminMFAAcceptance(TestCase):
         self.csrf=self.client.cookies["csrftoken"].value
         self.owner=User.objects.create_superuser(username="owner@example.test",email="owner@example.test",password="HighlySecureAdmin#2026")
     def post(self,path,data,client=None,csrf=None):
-        return (client or self.client).post(path,data=json.dumps(data),content_type="application/json",HTTP_X_CSRFTOKEN=csrf or self.csrf)
+        use=client or self.client
+        return use.post(path,data=json.dumps(data),content_type="application/json",
+                        HTTP_X_CSRFTOKEN=use.cookies["csrftoken"].value)
     def password_stage(self):
         result=self.post("/api/auth/login/",{"email":self.owner.email,"password":"HighlySecureAdmin#2026"})
         self.assertEqual(result.status_code,202,result.content)
@@ -89,7 +91,7 @@ class AdminMFAAcceptance(TestCase):
         csrf=own.cookies["csrftoken"].value
         self.assertEqual(self.post("/api/auth/login/",{"email":target.email,"password":"ExampleUser#2026"},client=own,csrf=csrf).status_code,200)
         board={"version":1,"tasks":[{"title":"Sensitive personal diary"}],"completions":[]}
-        self.assertEqual(own.put("/api/board/",data=json.dumps({"board":board,"revision":0}),content_type="application/json",HTTP_X_CSRFTOKEN=csrf).status_code,200)
+        self.assertEqual(own.put("/api/board/",data=json.dumps({"board":board,"revision":0}),content_type="application/json",HTTP_X_CSRFTOKEN=own.cookies["csrftoken"].value).status_code,200)
         self.assertEqual(self.post(f"/api/admin/users/{target.pk}/sessions/",{}).status_code,200)
         self.assertEqual(own.get("/api/board/").status_code,401)
         response=self.client.get("/api/admin/overview/").json()

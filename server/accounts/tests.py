@@ -20,7 +20,7 @@ class AccountAcceptance(TestCase):
 
     def post(self,path,data):
         return self.c.post(path,data=json.dumps(data),content_type="application/json",
-                           HTTP_X_CSRFTOKEN=self.token)
+                           HTTP_X_CSRFTOKEN=self.c.cookies["csrftoken"].value)
 
     def register(self,email="alice@example.test"):
         with patch("accounts.views.captcha_valid", return_value=True):
@@ -60,10 +60,10 @@ class AccountAcceptance(TestCase):
         self.post("/api/auth/login/",{"email":user.email,"password":"SafePassword#2026"})
         state={"version":1,"tasks":[{"title":"Alice confidential task"}],"completions":[],"plannedEntries":[]}
         response=self.c.put("/api/board/",data=json.dumps({"board":state,"revision":0}),
-                            content_type="application/json",HTTP_X_CSRFTOKEN=self.token)
+                            content_type="application/json",HTTP_X_CSRFTOKEN=self.c.cookies["csrftoken"].value)
         self.assertEqual(response.status_code,200,response.content)
         conflict=self.c.put("/api/board/",data=json.dumps({"board":state,"revision":0}),
-                            content_type="application/json",HTTP_X_CSRFTOKEN=self.token)
+                            content_type="application/json",HTTP_X_CSRFTOKEN=self.c.cookies["csrftoken"].value)
         self.assertEqual(conflict.status_code,409)
         self.post("/api/auth/logout/",{})
         bob=User.objects.create_user(username="bob@example.test",email="bob@example.test",
@@ -87,7 +87,7 @@ class AccountAcceptance(TestCase):
         self.post("/api/auth/verify-otp/",{"email":user.email,"otp":code})
         self.post("/api/auth/login/",{"email":user.email,"password":"SafePassword#2026"})
         r=self.c.delete("/api/account/",data=json.dumps({"password":"SafePassword#2026"}),
-                        content_type="application/json",HTTP_X_CSRFTOKEN=self.token)
+                        content_type="application/json",HTTP_X_CSRFTOKEN=self.c.cookies["csrftoken"].value)
         self.assertEqual(r.status_code,200,r.content)
         self.assertFalse(User.objects.filter(pk=user.pk).exists())
         self.assertEqual(self.c.get("/api/board/").status_code,401)
