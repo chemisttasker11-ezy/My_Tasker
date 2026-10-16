@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
-from .models import AdminAudit, AdminSecurity, UserBoard, UserSessionStamp
+from .models import AdminAudit, AdminSecurity, UserBoard, UserSessionStamp, VerifiedEmail
 from .views import limited_ip, limit, payload, respond_error
 from .admin_security import (
     audit_event, authorised_staff, decrypted, encrypted, login_with_mfa,
@@ -172,13 +172,8 @@ def set_user_status(request,user_id):
         user=User.objects.select_for_update().filter(pk=user_id).first()
         if not user:return respond_error("User does not exist.",404)
         if user.pk==actor.pk or user.is_superuser:return respond_error("Superuser or self-management is blocked.",403)
-        if enabled and not user.is_staff:
-            # Only re-enable a previously verified account, never bypass OTP.
-            if not hasattr(user,"email_otp") and not user.is_active:
-                # An inactive account may be suspended OR unverified.
-                # Verified status is recorded by a separate stamp in the future;
-                # do not re-activate from the admin dashboard without proof.
-                return respond_error("Account activation requires successful email verification.",409)
+        if enabled and not VerifiedEmail.objects.filter(user=user).exists() and not user.is_superuser:
+            return respond_error("Account activation requires successful email verification.",409)
         user.is_active=enabled
         user.save(update_fields=["is_active"])
         if not enabled:
@@ -213,7 +208,7 @@ def set_staff(request,user_id):
     with transaction.atomic():
         user=User.objects.select_for_update().filter(pk=user_id).first()
         if not user:return respond_error("User does not exist.",404)
-        if user.pk==actor.pk or user.is_superuser or not user.is_active:
+        if user.pk==actor.pk or user.is_superuser or not user.is_active or not VerifiedEmail.objects.filter(user=user).exists():
             return respond_error("Cannot change self, superusers or inactive accounts.",403)
         user.is_staff=staff
         user.save(update_fields=["is_staff"])

@@ -46,3 +46,8 @@ class UserSessionStamp(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="session_stamp")
     version = models.PositiveIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
+
+class VerifiedEmail(models.Model):
+    """Persist proof of verification separately from disposable OTP challenges."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="verified_email")
+    verified_at = models.DateTimeField(auto_now_add=True)

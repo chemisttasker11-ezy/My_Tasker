@@ -14,7 +14,7 @@ from pathlib import Path
 from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model, login, logout, password_validation
 from django.contrib.auth.hashers import make_password, check_password
-from django.db import transaction
+from django.db import transaction, models
 from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
 from django.http import FileResponse, HttpResponse, JsonResponse
@@ -23,7 +23,7 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from django.middleware.csrf import get_token
-from .models import EmailOTP, RateBucket, UserBoard, UserSessionStamp
+from .models import EmailOTP, RateBucket, UserBoard, UserSessionStamp, VerifiedEmail
 import requests
 
 logger = logging.getLogger(__name__)
@@ -222,6 +222,7 @@ def verify_otp(request):
         ok, record = checked_code(user, data.get("otp"), "verify")
         if not ok or record is None:
             return respond_error("Invalid or expired verification code.")
+        VerifiedEmail.objects.get_or_create(user=user)
         user.is_active = True
         user.save(update_fields=["is_active"])
         record.delete()
@@ -347,6 +348,8 @@ def reset_password(request):
         user.set_password(next_password)
         user.save(update_fields=["password"])
         token.delete()
+        UserSessionStamp.objects.select_for_update().get_or_create(user=user)
+        UserSessionStamp.objects.filter(user=user).update(version=models.F("version")+1)
     return JsonResponse({"detail":"Password updated. Log in with your new password."})
 
 

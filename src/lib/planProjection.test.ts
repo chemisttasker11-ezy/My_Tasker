@@ -39,7 +39,7 @@ describe('schedule projection is shared by calendar, printable tracker and quote
   });
   it('quotes reflect selected day, not whichever undated routine happens to be on the board',()=>{
     const family=createTask({title:'Family dinner',lane:'urgent',category:'Family'});
-    const work=createTask({title:'Medical report',category:'Pharmacy'});
+    const work=createTask({title:'Medical report',category:'Pharmacy',lane:'weekly'});
     const state=addEntry({...initialState(),tasks:[family,work]},work.id,day);
     expect(relevantTasksForDate(state,day).map(t=>t.title)).toEqual(['Medical report']);
     expect(relevantTasksForDate(state,'2026-10-18').map(t=>t.title)).toEqual(['Family dinner']);

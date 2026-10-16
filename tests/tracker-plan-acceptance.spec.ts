@@ -39,7 +39,7 @@ test('quote selection follows chosen date, including a saved planned copy',async
   await page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name:/Direction & quotes/}).click();
   await page.getByRole('textbox',{name:'Quote date'}).fill('2026-10-20');
   await expect(page.getByRole('heading',{name:'A quote for the day'})).toBeVisible();
-  await expect(page.getByRole('blockquote')).toHaveCount(1);
+  await expect(page.locator('.quote-settings-grid blockquote')).toHaveCount(1);
 });
 
 test('calendar multi-day selection opens a modal with copy/paste and remains keyboard-dismissible',async({page})=>{
