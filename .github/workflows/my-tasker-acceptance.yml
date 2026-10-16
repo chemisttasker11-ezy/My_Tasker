@@ -10,6 +10,18 @@ on:
 permissions:
   contents: read
 jobs:
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Audit production and developer dependencies
+        run: npm audit --audit-level=high
   build-and-unit:
     runs-on: ubuntu-latest
     timeout-minutes: 20

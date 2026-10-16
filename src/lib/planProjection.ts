@@ -36,8 +36,11 @@ export function relevantTasksForDate(board: BoardState, date: string): Task[] {
   const sourceById = new Map(board.tasks.map(task => [task.id, task]));
   const current = [...planned.map(e => taskForPlanned(e,sourceById.get(e.sourceTaskId))), ...legacy.map(o => o.task)];
   const included = new Set([...planned.map(e => e.sourceTaskId), ...legacy.map(o => o.task.id)]);
+  // Prioritise the chosen day's actual schedule. Undated routines are a fallback
+  // only when no dated work exists, otherwise generic backlog biases every quote.
+  if (current.length) return current;
   const undatedPriorities = board.tasks.filter(t => !t.archivedAt && !t.dueDate &&
     (t.lane === 'daily' || t.lane === 'urgent') && !included.has(t.id) &&
     !isCompleted(t, board.completions, date));
-  return [...current, ...undatedPriorities];
+  return undatedPriorities;
 }
