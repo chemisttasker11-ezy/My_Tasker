@@ -21,7 +21,10 @@ export function useBoardPersistence(account?: SignedInUser, initialCloud?: Cloud
   const [board, setBoard] = useState<BoardState>(() =>
     account ? (initialCloud?.board ? validateImported(initialCloud.board) : sampleBoard()) : readState());
   const lastPersisted = useRef(JSON.stringify(board));
-  const cloudSaved = useRef(JSON.stringify(initialCloud?.board ?? null));
+  // Validation rebuilds the imported board into canonical key order. Compare
+  // canonical snapshots, otherwise merely signing in writes an unchanged board
+  // and increments the shared revision, causing phantom cross-device conflicts.
+  const cloudSaved = useRef(JSON.stringify(initialCloud?.board ? validateImported(initialCloud.board) : null));
   const cloudRevision = useRef(initialCloud?.revision ?? 0);
   const cloudQueue = useRef<Promise<void>>(Promise.resolve());
   const cloudBlocked = useRef(false);

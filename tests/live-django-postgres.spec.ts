@@ -53,9 +53,21 @@ test.describe('@auth-gate @real-server React Django PostgreSQL',()=>{
     await expect.poll(async()=> (await data(a.page)).revision,{timeout:25000}).toBeGreaterThan(0);
     const b=await signIn(browser,'alice@ci.mytasker.test');
     const before=await data(b.page);
+    const bSaveResponses:number[]=[];
+    b.page.on('response',response=>{
+      if(new URL(response.url()).pathname==='/api/board/' && response.request().method()==='PUT')
+        bSaveResponses.push(response.status());
+    });
+    // Mounting with an existing server board must not silently save an identical
+    // board or increment the revision. A server revision represents a user edit.
+    await b.page.waitForTimeout(1300);
+    expect((await data(b.page)).revision).toBe(before.revision);
     await create(a.page,'Alice latest concurrent change');
     await expect.poll(async()=> (await data(a.page)).revision,{timeout:25000}).toBeGreaterThan(before.revision);
     await create(b.page,'Bob stale local draft');
+    // Assert actual backend optimistic-lock rejection, not only a visual banner.
+    await expect.poll(()=>bSaveResponses.length,{timeout:25000}).toBeGreaterThan(0);
+    expect(bSaveResponses).toContain(409);
     await expect(b.page.getByRole('alert').filter({hasText:'Changes not synced.'})).toBeVisible({timeout:25000});
     const after=await data(a.page);
     expect(after.board?.tasks.some(t=>t.title==='Alice latest concurrent change')).toBe(true);
