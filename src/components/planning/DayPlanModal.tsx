@@ -1,10 +1,12 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type Dispatch,
+  type RefObject,
   type SetStateAction
 } from 'react';
 import {
@@ -14,6 +16,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDndContext,
   type DragEndEvent
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
@@ -48,6 +51,16 @@ export interface DayPlanModalProps {
   returnFocusTo?: HTMLElement | null;
 }
 
+function DragStateTracker({ draggingRef }: { draggingRef: RefObject<boolean> }) {
+  const { active } = useDndContext();
+  // Early cancellation can reset active without emitting onDragCancel, before
+  // dnd-kit has measured the drag. Track its state rather than callback history.
+  useLayoutEffect(() => {
+    draggingRef.current = active !== null;
+  }, [active, draggingRef]);
+  return null;
+}
+
 export function DayPlanModal({
   date,
   board,
@@ -74,7 +87,6 @@ export function DayPlanModal({
 
   // Drag tracking for Esc cancellation
   const isDraggingRef = useRef(false);
-  const justCancelledDragRef = useRef(false);
 
   // Edit sub-view state
   const [editingEntry, setEditingEntry] = useState<PlannedEntry | null>(null);
@@ -107,7 +119,8 @@ export function DayPlanModal({
         lastFocusedEntryRef.current.focus();
       } else if (entryId && modalRef.current) {
         const entryCard = modalRef.current.querySelector<HTMLElement>(`[data-testid="planned-entry-${entryId}"]`);
-        const target = entryCard?.querySelector<HTMLElement>('button[aria-label^="Open details"], button') ?? entryCard;
+        const target = entryCard?.querySelector<HTMLElement>('button[aria-label^="Open details"]')
+          ?? entryCard?.querySelector<HTMLElement>('button') ?? entryCard;
         target?.focus();
       }
     });
@@ -194,7 +207,7 @@ export function DayPlanModal({
           return;
         }
 
-        if (isDraggingRef.current || justCancelledDragRef.current) {
+        if (isDraggingRef.current) {
           // Drag cancellation is handled by dnd-kit; keep planning modal open
           return;
         }
@@ -237,9 +250,11 @@ export function DayPlanModal({
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    // Observe the drag state before dnd-kit's document bubble listener cancels it.
+    // Only the Escape event for an active drag is reserved for the sensor.
+    document.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [handleCancelEdit]);
 
@@ -258,23 +273,7 @@ export function DayPlanModal({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const handleDragStart = () => {
-    isDraggingRef.current = true;
-    justCancelledDragRef.current = false;
-  };
-
-  const handleDragCancel = () => {
-    isDraggingRef.current = false;
-    justCancelledDragRef.current = true;
-    requestAnimationFrame(() => {
-      justCancelledDragRef.current = false;
-    });
-  };
-
   const handleDragEnd = (event: DragEndEvent) => {
-    isDraggingRef.current = false;
-    justCancelledDragRef.current = false;
-
     const { active, over } = event;
     if (!active || !over) return;
 
@@ -613,10 +612,9 @@ export function DayPlanModal({
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragCancel={handleDragCancel}
               onDragEnd={handleDragEnd}
             >
+              <DragStateTracker draggingRef={isDraggingRef} />
               <div className="day-plan-modal-body">
                 <div className="day-plan-main-col">
                   {/* Existing dated tasks for that day shown read-only above */}

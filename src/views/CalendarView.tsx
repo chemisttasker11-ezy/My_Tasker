@@ -382,6 +382,8 @@ export function CalendarView({ board, setBoard, tasks, completions, today, onEdi
               key={date}
               className={`calendar-cell ${date.slice(0, 7) !== anchor.slice(0, 7) ? 'outside' : ''} ${date === today ? 'is-today' : ''}`}
               data-testid={`calendar-date-${date}`}
+              // Keep a blank gutter available for day planning beside task chips.
+              style={{ paddingInline: 8 }}
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) return;
                 const button = (e.currentTarget as HTMLElement).querySelector<HTMLElement>('.calendar-day-number');

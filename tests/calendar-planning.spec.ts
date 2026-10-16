@@ -406,6 +406,8 @@ test.describe('Calendar day planning window and cell entries', () => {
 
     // Initiate keyboard drag with Space
     await page.keyboard.press('Space');
+    // dnd-kit measures the card and attaches its keyboard listener asynchronously.
+    await expect(firstCard).toHaveClass(/is-dragging/);
 
     // Press Escape to cancel the drag
     await page.keyboard.press('Escape');
@@ -427,7 +429,7 @@ test.describe('Calendar day planning window and cell entries', () => {
 
     // Click blank area of the month cell
     await dayCell.click({ position: { x: 5, y: 50 } });
-    const modal = page.getByRole('dialog').first();
+    const modal = page.getByRole('dialog', { name: /^Day planning:/ });
     await expect(modal).toBeVisible();
 
     // Add an entry
